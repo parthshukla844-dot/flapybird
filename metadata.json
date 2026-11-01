@@ -1,0 +1,6 @@
+{
+  "name": "Flappy Pixel",
+  "description": "Retro pixel art Flappy Bird clone with procedurally generated obstacles, chiptune audio, and dynamic environments.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

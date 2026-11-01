@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .image-render-pixelated {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
+
+  .arcade-slider::-webkit-scrollbar {
+    height: 5px;
+  }
+  .arcade-slider::-webkit-scrollbar-track {
+    background: #18181b;
+    border-radius: 4px;
+  }
+  .arcade-slider::-webkit-scrollbar-thumb {
+    background: #f7d302;
+    border-radius: 4px;
+    box-shadow: 0 0 6px rgba(247, 211, 2, 0.6);
+  }
+  .arcade-slider::-webkit-scrollbar-thumb:hover {
+    background: #fde047;
+  }
+}
