@@ -1,3 +1,17 @@
-<link rel="icon" href="/Gemini_Generated_Image_mc8iuqmc8iuqmc8i.png" />
-
-![image alt](<link rel="icon" href="/Gemini_Generated_Image_mc8iuqmc8iuqmc8i.png" />)
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Flappy Pixel - Retro Arcade Flap</title>
+    <meta name="description" content="Retro pixel art Flappy Bird clone with procedurally generated obstacles, chiptune audio, and dynamic environments." />
+    <link rel="icon" href="/Gemini_Generated_Image_mc8iuqmc8iuqmc8i.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,700;0,800;1,800;1,900&family=Press+Start+2P&family=Silkscreen:wght@400;700&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-[#121212] text-white select-none overflow-hidden touch-none font-mono">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
