@@ -185,7 +185,7 @@ export class ProceduralGenerator {
         y: targetCenter,
         radius: 12,
         collected: false,
-        duration: selectedType === 'laser' ? 5 : 10, // 5s for unlimited laser, 10s for other advantages
+        duration: selectedType === 'laser' ? 2 : 10, // 2s for unlimited laser, 10s for other advantages
         bobOffset: Math.random() * 10,
       });
     }

@@ -351,7 +351,7 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, on
                       <Zap className="size-3 fill-current" /> KEY: X / L / SHIFT
                     </span>
                     <span className="text-white/90 font-bold">
-                      <strong>FLAPPY BIRD LASER BEAM CANNON:</strong> Obliterates incoming pipes, laser grids & hazards ahead! Earns +2 pts per destroyed obstacle. 3 ammo charges maximum (1 min refill per bar). <strong>RATE OF FIRE & PIPE FLOW: Can shoot only 1 laser at a time with a mandatory 0.25-second cooldown pause between shots. When shooting multiple lasers, pipes continue to spawn continuously ahead. If you shoot 4 pipes with the unlimited laser, the power-up effect smoothly concludes.</strong> Picking up the Hyper Laser advantage gives you unlimited laser beams for up to 5 seconds. (Or right-click / tap on-screen Laser button).
+                      <strong>FLAPPY BIRD LASER BEAM CANNON:</strong> Obliterates incoming pipes, laser grids & hazards ahead! Earns +2 pts per destroyed obstacle. 3 ammo charges maximum (1 min refill per bar). <strong>RATE OF FIRE & PIPE FLOW: Can shoot only 1 laser at a time with a mandatory 0.25-second cooldown pause between shots. When shooting multiple lasers, pipes continue to spawn continuously ahead. If you shoot 4 pipes with the unlimited laser, the power-up effect smoothly concludes.</strong> Picking up the Hyper Laser advantage gives you unlimited laser beams for up to 2 seconds. (Or right-click / tap on-screen Laser button).
                     </span>
                   </div>
                 </div>
@@ -484,11 +484,11 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, on
                     </div>
                     <div>
                       <span className="font-mono font-black text-[#ef4444] text-xs sm:text-sm">HYPER LASER CANNON</span>
-                      <span className="block font-mono text-[9px] text-[#ef4444]/90 font-bold">5 SECONDS • MAX 4 PIPES • 0.25s SHOT PAUSE • BALANCED DROP RATE</span>
+                      <span className="block font-mono text-[9px] text-[#ef4444]/90 font-bold">2 SECONDS • MAX 4 PIPES • 0.25s SHOT PAUSE • BALANCED DROP RATE</span>
                     </div>
                   </div>
                   <p className="text-white/85 text-[10px] sm:text-xs">
-                    Unleashes Flappy Bird's high-tech plasma blaster! Grants up to 5 seconds of unlimited laser ammo to incinerate obstacles ahead (+2 pts bonus). <strong>Continuous Pipe Flow & Cap: Pipes will never stop spawning when firing. You can shoot only 1 laser at a time (with a 0.25s pause between shots); once you shoot 4 pipes, the unlimited laser effect is smoothly concluded.</strong> Has an equal, balanced drop rate (20%) alongside all other advantage power-ups. Standard laser charges take 1 full minute (60s) per bar to refill.
+                    Unleashes Flappy Bird's high-tech plasma blaster! Grants up to 2 seconds of unlimited laser ammo to incinerate obstacles ahead (+2 pts bonus). <strong>Continuous Pipe Flow & Cap: Pipes will never stop spawning when firing. You can shoot only 1 laser at a time (with a 0.25s pause between shots); once you shoot 4 pipes, the unlimited laser effect is smoothly concluded.</strong> Has an equal, balanced drop rate (20%) alongside all other advantage power-ups. Standard laser charges take 1 full minute (60s) per bar to refill.
                   </p>
                 </div>
               </div>

@@ -1209,7 +1209,7 @@ export default function App() {
               </span>
               <span className="text-[8px] font-mono text-black/60">
                 {activePowerUps.laserTimer > 0 
-                  ? `HYPER 5s (${Math.ceil(activePowerUps.laserTimer / 1000)}s) ∞` 
+                  ? `HYPER 2s (${Math.ceil(activePowerUps.laserTimer / 1000)}s) ∞` 
                   : activePowerUps.laserAmmo < 3
                   ? `AMMO ${activePowerUps.laserAmmo}/3 (${Math.max(1, Math.ceil(60 * (1 - (activePowerUps.laserRechargeProgress ?? 1))))}s)`
                   : 'AMMO 3/3 (READY)'}

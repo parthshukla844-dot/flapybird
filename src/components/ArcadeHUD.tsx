@@ -86,7 +86,7 @@ export const ArcadeHUD: React.FC<ArcadeHUDProps> = ({
       name: 'HYPER LASER',
       active: activePowerUps.laserTimer > 0,
       timer: activePowerUps.laserTimer,
-      maxDuration: 5000,
+      maxDuration: 2000,
       icon: <Zap className="size-3.5 text-[#ef4444] shrink-0 fill-current" />,
       color: '#ef4444',
       barColor: 'bg-[#ef4444]',
@@ -475,7 +475,7 @@ export const ArcadeHUD: React.FC<ArcadeHUDProps> = ({
               <div className="flex items-center gap-1 mt-0.5">
                 {isHyperLaser ? (
                   <span className="text-[9px] font-mono font-black text-cyan-300 tracking-wider animate-pulse">
-                    ⚡ UNLIMITED AMMO (5s RAPID FIRE)
+                    ⚡ UNLIMITED AMMO (2s RAPID FIRE)
                   </span>
                 ) : (
                   <>

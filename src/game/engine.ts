@@ -932,11 +932,11 @@ export class FlappyEngine {
       this.activePowerUps.shrinkTimer = POWERUP_DURATION_MS;
       this.addScorePopup(this.birdX, this.birdY - 20, 'MINI BIRD!', '#34D399');
     } else if (type === 'laser') {
-      const LASER_POWERUP_DURATION_MS = this.selectedSkin.id === 'cyber' ? 7000 : 5000;
+      const LASER_POWERUP_DURATION_MS = this.selectedSkin.id === 'cyber' ? 5000 : 2000;
       this.activePowerUps.laserTimer = LASER_POWERUP_DURATION_MS;
       this.hyperLaserPipesDestroyed = 0;
       this.laserAmmo = this.maxLaserAmmo;
-      this.addScorePopup(this.birdX, this.birdY - 20, 'UNLIMITED LASER (5s / 4 PIPES)!', '#EF4444');
+      this.addScorePopup(this.birdX, this.birdY - 20, 'UNLIMITED LASER (2s / 4 PIPES)!', '#EF4444');
       this.fireLaser(true);
     }
   }

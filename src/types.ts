@@ -147,7 +147,7 @@ export interface ActivePowerUps {
   slowmoTimer: number; // remaining ms
   multiplierTimer: number; // remaining ms
   shrinkTimer: number; // remaining ms
-  laserTimer: number; // remaining ms (for 5s Hyper Laser advantage)
+  laserTimer: number; // remaining ms (for 2s Hyper Laser advantage)
   laserAmmo: number; // current laser charges (0 to 3)
   maxLaserAmmo: number; // maximum laser charges (3)
   isLaserFiring: boolean; // whether laser beam is currently active
