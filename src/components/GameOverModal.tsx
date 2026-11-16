@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, RotateCcw, Sparkles, Award, Home, CloudSun } from 'lucide-react';
+import { Trophy, RotateCcw, Sparkles, Award, Home, CloudSun, Mail } from 'lucide-react';
 import { retroAudio } from '../game/audio';
 
 interface GameOverModalProps {
@@ -13,6 +13,7 @@ interface GameOverModalProps {
   onOpenShop: (tab?: 'avatars' | 'weathers') => void;
   onGoHome: () => void;
   onRequestReset?: () => void;
+  onShareGmail?: () => void;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -26,6 +27,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   onOpenShop,
   onGoHome,
   onRequestReset,
+  onShareGmail,
 }) => {
   if (!isOpen) return null;
 
@@ -152,6 +154,20 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               WEATHERS
             </button>
           </div>
+
+          {onShareGmail && (
+            <button
+              id="btn-gameover-share-gmail"
+              onClick={() => {
+                retroAudio.playSelect();
+                onShareGmail();
+              }}
+              className="w-full flex items-center justify-center gap-1.5 rounded-lg border-2 border-[#ea4335]/70 bg-[#ea4335]/15 py-1.5 sm:py-2 font-mono text-[10px] sm:text-xs font-black text-[#ea4335] tracking-wider hover:border-[#ea4335] hover:bg-[#ea4335] hover:text-white cursor-pointer transition-colors"
+            >
+              <Mail className="size-3 sm:size-3.5" />
+              SHARE SCORE VIA GMAIL
+            </button>
+          )}
 
           <button
             id="btn-gameover-home"

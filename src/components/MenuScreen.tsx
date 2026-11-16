@@ -1,7 +1,7 @@
 import React from 'react';
 import { Difficulty, BiomeType, BirdSkin } from '../types';
 import { BIOMES, BIOME_ITEMS } from '../game/pixelArt';
-import { Play, Sparkles, Trophy, Tv, Volume2, VolumeX, Music, CloudSun, Lock, RotateCcw, Maximize2, Minimize2, HelpCircle, History } from 'lucide-react';
+import { Play, Sparkles, Trophy, Tv, Volume2, VolumeX, Music, CloudSun, Lock, RotateCcw, Maximize2, Minimize2, HelpCircle, History, Mail, Cloud } from 'lucide-react';
 import { retroAudio } from '../game/audio';
 
 interface MenuScreenProps {
@@ -19,6 +19,10 @@ interface MenuScreenProps {
   onOpenShop: (tab?: 'avatars' | 'weathers') => void;
   onOpenInstructions?: () => void;
   onOpenHistory?: () => void;
+  onOpenGmail?: () => void;
+  isGmailConnected?: boolean;
+  onOpenLeaderboard?: () => void;
+  isCloudConnected?: boolean;
   onSelectDifficulty: (diff: Difficulty) => void;
   onSelectBiome: (biome: BiomeType) => void;
   onToggleCRT: () => void;
@@ -43,6 +47,10 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({
   onOpenShop,
   onOpenInstructions,
   onOpenHistory,
+  onOpenGmail,
+  isGmailConnected,
+  onOpenLeaderboard,
+  isCloudConnected,
   onSelectDifficulty,
   onSelectBiome,
   onToggleCRT,
@@ -153,6 +161,46 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({
               <span className="hidden md:inline font-mono text-[9px] lg:text-[11px] font-black tracking-wider uppercase">
                 HISTORY
               </span>
+            </button>
+          )}
+
+          {onOpenGmail && (
+            <button
+              id="btn-menu-gmail"
+              onClick={() => {
+                retroAudio.playSelect();
+                onOpenGmail();
+              }}
+              className="relative flex h-7 sm:h-8 md:h-10 lg:h-11 items-center gap-1.5 rounded-lg border-2 border-[#ea4335]/70 bg-[#ea4335]/15 px-2 sm:px-2.5 md:px-3 text-[#ea4335] transition-all hover:border-[#ea4335] hover:bg-[#ea4335] hover:text-white cursor-pointer shadow-md"
+              title="Open Gmail (Inbox & Share Score)"
+            >
+              <Mail className="size-3.5 sm:size-4 md:size-5 shrink-0" />
+              <span className="hidden md:inline font-mono text-[9px] lg:text-[11px] font-black tracking-wider uppercase">
+                GMAIL
+              </span>
+              {isGmailConnected && (
+                <span className="size-1.5 sm:size-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
+              )}
+            </button>
+          )}
+
+          {onOpenLeaderboard && (
+            <button
+              id="btn-menu-cloud-leaderboard"
+              onClick={() => {
+                retroAudio.playSelect();
+                onOpenLeaderboard();
+              }}
+              className="relative flex h-7 sm:h-8 md:h-10 lg:h-11 items-center gap-1.5 rounded-lg border-2 border-[#38bdf8]/70 bg-[#38bdf8]/15 px-2 sm:px-2.5 md:px-3 text-[#38bdf8] transition-all hover:border-[#38bdf8] hover:bg-[#38bdf8] hover:text-black cursor-pointer shadow-md"
+              title="Cloud Save & Global Leaderboard"
+            >
+              <Cloud className="size-3.5 sm:size-4 md:size-5 shrink-0" />
+              <span className="hidden md:inline font-mono text-[9px] lg:text-[11px] font-black tracking-wider uppercase">
+                CLOUD
+              </span>
+              {isCloudConnected && (
+                <span className="size-1.5 sm:size-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
+              )}
             </button>
           )}
 

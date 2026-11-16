@@ -1,0 +1,280 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Deny all reads and writes by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================
+    // Global Hardened Primitives
+    // =========================================================
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    // =========================================================
+    // Validation Blueprints
+    // =========================================================
+    function isValidUserSave(data) {
+      return data.keys().hasAll([
+        'uid',
+        'displayName',
+        'highScore',
+        'totalCoins',
+        'unlockedSkins',
+        'selectedSkinId',
+        'unlockedBiomes',
+        'selectedBiome',
+        'difficulty',
+        'crtFilterEnabled',
+        'soundEnabled',
+        'musicEnabled',
+        'createdAt',
+        'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'uid',
+        'displayName',
+        'highScore',
+        'totalCoins',
+        'unlockedSkins',
+        'selectedSkinId',
+        'unlockedBiomes',
+        'selectedBiome',
+        'difficulty',
+        'crtFilterEnabled',
+        'soundEnabled',
+        'musicEnabled',
+        'createdAt',
+        'updatedAt'
+      ])
+      && data.uid is string
+      && isValidId(data.uid)
+      && data.uid == request.auth.uid
+      && data.displayName is string
+      && data.displayName.size() >= 1
+      && data.displayName.size() <= 60
+      && data.highScore is int
+      && data.highScore >= 0
+      && data.highScore <= 1000000
+      && data.totalCoins is int
+      && data.totalCoins >= 0
+      && data.totalCoins <= 10000000
+      && data.unlockedSkins is list
+      && data.unlockedSkins.size() >= 1
+      && data.unlockedSkins.size() <= 30
+      && data.unlockedSkins[0] is string
+      && data.selectedSkinId is string
+      && data.selectedSkinId.size() >= 1
+      && data.selectedSkinId.size() <= 40
+      && data.selectedSkinId.matches('^[a-zA-Z0-9_\\-]+$')
+      && data.unlockedBiomes is list
+      && data.unlockedBiomes.size() >= 1
+      && data.unlockedBiomes.size() <= 20
+      && data.unlockedBiomes[0] is string
+      && data.selectedBiome is string
+      && data.selectedBiome.size() >= 1
+      && data.selectedBiome.size() <= 20
+      && data.selectedBiome in ['day', 'night', 'sunset', 'cyberpunk', 'volcano', 'winter']
+      && data.difficulty is string
+      && data.difficulty.size() >= 1
+      && data.difficulty.size() <= 10
+      && data.difficulty in ['easy', 'medium', 'hard']
+      && data.crtFilterEnabled is bool
+      && data.soundEnabled is bool
+      && data.musicEnabled is bool
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp;
+    }
+
+    function isValidHistoryRecord(data) {
+      return data.keys().hasAll(['uid', 'type', 'timestamp', 'title', 'description', 'createdAt'])
+      && data.keys().hasOnly([
+        'uid',
+        'type',
+        'timestamp',
+        'title',
+        'description',
+        'score',
+        'coinsEarned',
+        'cost',
+        'medalTier',
+        'difficulty',
+        'createdAt'
+      ])
+      && data.uid is string
+      && isValidId(data.uid)
+      && data.uid == request.auth.uid
+      && data.type is string
+      && data.type.size() >= 1
+      && data.type.size() <= 20
+      && data.type in ['medal', 'avatar', 'weather']
+      && data.timestamp is int
+      && data.timestamp >= 0
+      && data.title is string
+      && data.title.size() >= 1
+      && data.title.size() <= 100
+      && data.description is string
+      && data.description.size() >= 1
+      && data.description.size() <= 240
+      && (!('score' in data) || (data.score is int && data.score >= 0 && data.score <= 1000000))
+      && (!('coinsEarned' in data) || (data.coinsEarned is int && data.coinsEarned >= 0 && data.coinsEarned <= 100000))
+      && (!('cost' in data) || (data.cost is int && data.cost >= 0 && data.cost <= 100000))
+      && (!('medalTier' in data) || (data.medalTier is string && data.medalTier.size() >= 1 && data.medalTier.size() <= 20 && data.medalTier in ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'OBSIDIAN', 'NO MEDAL']))
+      && (!('difficulty' in data) || (data.difficulty is string && data.difficulty.size() >= 1 && data.difficulty.size() <= 10 && data.difficulty in ['easy', 'medium', 'hard']))
+      && data.createdAt is timestamp;
+    }
+
+    function isValidLeaderboardEntry(data) {
+      return data.keys().hasAll([
+        'uid',
+        'playerName',
+        'score',
+        'difficulty',
+        'skinId',
+        'biomeId',
+        'medalTier',
+        'createdAt',
+        'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'uid',
+        'playerName',
+        'score',
+        'difficulty',
+        'skinId',
+        'biomeId',
+        'medalTier',
+        'createdAt',
+        'updatedAt'
+      ])
+      && data.uid is string
+      && isValidId(data.uid)
+      && data.uid == request.auth.uid
+      && data.playerName is string
+      && data.playerName.size() >= 1
+      && data.playerName.size() <= 40
+      && data.score is int
+      && data.score >= 0
+      && data.score <= 1000000
+      && data.difficulty is string
+      && data.difficulty.size() >= 1
+      && data.difficulty.size() <= 10
+      && data.difficulty in ['easy', 'medium', 'hard']
+      && data.skinId is string
+      && data.skinId.size() >= 1
+      && data.skinId.size() <= 40
+      && data.skinId.matches('^[a-zA-Z0-9_\\-]+$')
+      && data.biomeId is string
+      && data.biomeId.size() >= 1
+      && data.biomeId.size() <= 20
+      && data.biomeId in ['day', 'night', 'sunset', 'cyberpunk', 'volcano', 'winter']
+      && data.medalTier is string
+      && data.medalTier.size() >= 1
+      && data.medalTier.size() <= 20
+      && data.medalTier in ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'OBSIDIAN', 'NO MEDAL']
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp;
+    }
+
+    // =========================================================
+    // Collection Rules
+    // =========================================================
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserSave(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserSave(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName',
+          'highScore',
+          'totalCoins',
+          'unlockedSkins',
+          'selectedSkinId',
+          'unlockedBiomes',
+          'selectedBiome',
+          'difficulty',
+          'crtFilterEnabled',
+          'soundEnabled',
+          'musicEnabled',
+          'updatedAt'
+        ]);
+      allow delete: if isValidId(userId) && isOwner(userId);
+
+      match /history/{entryId} {
+        allow get: if isValidId(userId)
+          && isValidId(entryId)
+          && isOwner(userId)
+          && get(/databases/$(database)/documents/users/$(userId)).data.uid == request.auth.uid;
+        allow list: if isValidId(userId)
+          && isOwner(userId)
+          && resource.data.uid == request.auth.uid;
+        allow create: if isValidId(userId)
+          && isValidId(entryId)
+          && isOwner(userId)
+          && isValidHistoryRecord(incoming())
+          && incoming().createdAt == request.time
+          && get(/databases/$(database)/documents/users/$(userId)).data.uid == request.auth.uid;
+        allow update: if false;
+        allow delete: if isValidId(userId) && isValidId(entryId) && isOwner(userId);
+      }
+    }
+
+    match /leaderboard/{userId} {
+      allow get: if isValidId(userId) && isVerifiedUser();
+      allow list: if isVerifiedUser() && resource.data.score >= 0;
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidLeaderboardEntry(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidLeaderboardEntry(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'playerName',
+          'score',
+          'difficulty',
+          'skinId',
+          'biomeId',
+          'medalTier',
+          'updatedAt'
+        ]);
+      allow delete: if isValidId(userId) && isOwner(userId);
+    }
+  }
+}

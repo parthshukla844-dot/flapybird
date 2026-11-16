@@ -1,0 +1,239 @@
+{
+  "entities": {
+    "UserSave": {
+      "title": "UserSave",
+      "description": "Private cloud save state and settings for an authenticated Flappy Pixel player.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the save owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Player display alias.",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "highScore": {
+          "type": "integer",
+          "description": "Highest pipe score achieved by the player."
+        },
+        "totalCoins": {
+          "type": "integer",
+          "description": "Total unspent arcade coins in the player bank."
+        },
+        "unlockedSkins": {
+          "type": "array",
+          "description": "List of unlocked bird skin IDs (max 30)."
+        },
+        "selectedSkinId": {
+          "type": "string",
+          "description": "Currently equipped bird skin ID.",
+          "minLength": 1,
+          "maxLength": 40,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "unlockedBiomes": {
+          "type": "array",
+          "description": "List of unlocked weather realm IDs (max 20)."
+        },
+        "selectedBiome": {
+          "type": "string",
+          "description": "Currently active weather biome.",
+          "enum": ["day", "night", "sunset", "cyberpunk", "volcano", "winter"]
+        },
+        "difficulty": {
+          "type": "string",
+          "description": "Preferred difficulty mode.",
+          "enum": ["easy", "medium", "hard"]
+        },
+        "crtFilterEnabled": {
+          "type": "boolean",
+          "description": "Whether CRT scanlines shader is enabled."
+        },
+        "soundEnabled": {
+          "type": "boolean",
+          "description": "Whether retro SFX are enabled."
+        },
+        "musicEnabled": {
+          "type": "boolean",
+          "description": "Whether chiptune music is enabled."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the cloud save was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the cloud save was last updated."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "highScore",
+        "totalCoins",
+        "unlockedSkins",
+        "selectedSkinId",
+        "unlockedBiomes",
+        "selectedBiome",
+        "difficulty",
+        "crtFilterEnabled",
+        "soundEnabled",
+        "musicEnabled",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "HistoryRecord": {
+      "title": "HistoryRecord",
+      "description": "Career milestone entry (medal earned, avatar unlocked, or weather unlocked) owned by a user.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of career milestone event.",
+          "enum": ["medal", "avatar", "weather"]
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Client event epoch timestamp in milliseconds."
+        },
+        "title": {
+          "type": "string",
+          "description": "Headline of the career event.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "description": "Details of the career milestone.",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "score": {
+          "type": "integer",
+          "description": "Optional run score."
+        },
+        "coinsEarned": {
+          "type": "integer",
+          "description": "Optional coins earned in the run."
+        },
+        "cost": {
+          "type": "integer",
+          "description": "Optional coin cost of unlock."
+        },
+        "medalTier": {
+          "type": "string",
+          "description": "Optional medal tier.",
+          "enum": ["BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "OBSIDIAN", "NO MEDAL"]
+        },
+        "difficulty": {
+          "type": "string",
+          "description": "Optional difficulty level.",
+          "enum": ["easy", "medium", "hard"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when record was created."
+        }
+      },
+      "required": ["uid", "type", "timestamp", "title", "description", "createdAt"]
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Public high-score entry for the global arcade leaderboard (contains zero PII).",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Player Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "playerName": {
+          "type": "string",
+          "description": "Public arcade handle shown on leaderboard.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "score": {
+          "type": "integer",
+          "description": "Player high score."
+        },
+        "difficulty": {
+          "type": "string",
+          "description": "Difficulty used for the high score.",
+          "enum": ["easy", "medium", "hard"]
+        },
+        "skinId": {
+          "type": "string",
+          "description": "Avatar skin ID used.",
+          "minLength": 1,
+          "maxLength": 40,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "biomeId": {
+          "type": "string",
+          "description": "Weather biome ID used.",
+          "enum": ["day", "night", "sunset", "cyberpunk", "volcano", "winter"]
+        },
+        "medalTier": {
+          "type": "string",
+          "description": "Highest medal tier achieved.",
+          "enum": ["BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "OBSIDIAN", "NO MEDAL"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when entry was first published."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when entry was last updated."
+        }
+      },
+      "required": [
+        "uid",
+        "playerName",
+        "score",
+        "difficulty",
+        "skinId",
+        "biomeId",
+        "medalTier",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserSave" },
+      "description": "Owner-only cloud save document storing scores, coins, unlocked avatars, unlocked weathers, and preferences."
+    },
+    "/users/{userId}/history/{entryId}": {
+      "schema": { "$ref": "#/entities/HistoryRecord" },
+      "description": "Owner-only career history milestone log subcollection."
+    },
+    "/leaderboard/{userId}": {
+      "schema": { "$ref": "#/entities/LeaderboardEntry" },
+      "description": "Global arcade high-score leaderboard (one document per user UID, public read for signed-in players, zero PII)."
+    }
+  }
+}

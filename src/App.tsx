@@ -19,7 +19,20 @@ import { PauseScreen } from './components/PauseScreen';
 import { ResetConfirmModal } from './components/ResetConfirmModal';
 import { InstructionsModal } from './components/InstructionsModal';
 import { HistoryModal } from './components/HistoryModal';
-import { Gamepad2, Info, Sparkles, Home, CloudSun, RotateCcw, Maximize2, Minimize2, HelpCircle, History, Zap } from 'lucide-react';
+import { GmailModal, GmailComposeSeed } from './components/GmailModal';
+import { LeaderboardModal } from './components/LeaderboardModal';
+import { initAuth, googleSignIn, firebaseGoogleSignIn, logout as gmailLogout } from './services/gmailAuth';
+import {
+  loadCloudSave,
+  upsertCloudSave,
+  loadCloudHistory,
+  syncHistoryEntry,
+  publishLeaderboardScore,
+  wipeCloudSave,
+  getMedalTierForScore,
+} from './services/firestoreService';
+import { User } from 'firebase/auth';
+import { Sparkles, CloudSun, RotateCcw, Maximize2, Minimize2, History, Mail, Cloud } from 'lucide-react';
 
 const STORAGE_KEY = 'FLAPPY_PIXEL_DATA_V2';
 const HISTORY_STORAGE_KEY = 'FLAPPY_PIXEL_HISTORY_V1';
@@ -56,13 +69,59 @@ export default function App() {
   const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
   const [resetToastMessage, setResetToastMessage] = useState<string | null>(null);
   const resetToastTimeoutRef = useRef<number | null>(null);
+
+  // Firebase Auth & Cloud Save / Leaderboard State
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const firebaseUserRef = useRef<User | null>(null);
+  const [isCloudModalOpen, setIsCloudModalOpen] = useState<boolean>(false);
+  const [isCloudSigningIn, setIsCloudSigningIn] = useState<boolean>(false);
+  const [cloudAuthError, setCloudAuthError] = useState<string | null>(null);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+  const [cloudError, setCloudError] = useState<string | null>(null);
+
+  // Gmail OAuth & Modal State (accessToken cached in memory only)
+  const [needsAuth, setNeedsAuth] = useState<boolean>(true);
+  const [gmailToken, setGmailToken] = useState<string | null>(null);
+  const [gmailUser, setGmailUser] = useState<User | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
+  const [gmailAuthError, setGmailAuthError] = useState<string | null>(null);
+  const [isGmailOpen, setIsGmailOpen] = useState<boolean>(false);
+  const [gmailInitialTab, setGmailInitialTab] = useState<'inbox' | 'compose'>('inbox');
+  const [gmailComposeSeed, setGmailComposeSeed] = useState<GmailComposeSeed | null>(null);
+
   const [activePowerUps, setActivePowerUps] = useState<ActivePowerUps>({
     shield: false,
     shieldTimer: 0,
     slowmoTimer: 0,
     multiplierTimer: 0,
     shrinkTimer: 0,
+    laserTimer: 0,
+    laserAmmo: 3,
+    maxLaserAmmo: 3,
+    isLaserFiring: false,
   });
+
+  // Initialize Firebase Auth listener for Cloud Save & Gmail OAuth
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (user, token) => {
+        firebaseUserRef.current = user;
+        setFirebaseUser(user);
+        setGmailUser(user);
+        setGmailToken(token);
+        setNeedsAuth(false);
+        setGmailAuthError(null);
+      },
+      (user) => {
+        firebaseUserRef.current = user;
+        setFirebaseUser(user);
+        setGmailUser(user);
+        setGmailToken(null);
+        setNeedsAuth(true);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
 
   // Load from local storage
   useEffect(() => {
@@ -150,6 +209,33 @@ export default function App() {
     } catch {
       // ignore
     }
+
+    const activeUser = firebaseUserRef.current;
+    if (activeUser) {
+      setCloudSyncStatus('syncing');
+      upsertCloudSave(activeUser.uid, {
+        displayName:
+          activeUser.displayName || activeUser.email?.split('@')[0] || 'Arcade Pilot',
+        highScore: newHighScore,
+        totalCoins: newTotalCoins,
+        unlockedSkins: newUnlockedSkins,
+        selectedSkinId: skinId,
+        unlockedBiomes: newUnlockedBiomes,
+        selectedBiome: biome,
+        difficulty: diff,
+        crtFilterEnabled: crt,
+        soundEnabled: snd,
+        musicEnabled: mus,
+      })
+        .then(() => {
+          setCloudSyncStatus('synced');
+          setCloudError(null);
+        })
+        .catch((err) => {
+          setCloudSyncStatus('error');
+          setCloudError(err instanceof Error ? err.message : 'Cloud save failed');
+        });
+    }
   }, []);
 
   // Append new event into permanent career history log
@@ -171,7 +257,124 @@ export default function App() {
       }
       return updated;
     });
+
+    const activeUser = firebaseUserRef.current;
+    if (activeUser) {
+      syncHistoryEntry(activeUser.uid, fullEntry).catch((err) => {
+        console.error('Failed to sync history entry:', err);
+      });
+    }
   }, []);
+
+  // Load & merge cloud save when Firebase user signs in
+  useEffect(() => {
+    if (!firebaseUser) {
+      setCloudSyncStatus('idle');
+      return;
+    }
+
+    let cancelled = false;
+    const syncOnSignIn = async () => {
+      setCloudSyncStatus('syncing');
+      setCloudError(null);
+      try {
+        const [cloudSave, cloudHistory] = await Promise.all([
+          loadCloudSave(firebaseUser.uid),
+          loadCloudHistory(firebaseUser.uid),
+        ]);
+        if (cancelled) return;
+
+        if (cloudSave) {
+          const mergedHigh = Math.max(highScore, cloudSave.highScore || 0);
+          const mergedCoins = Math.max(totalCoins, cloudSave.totalCoins || 0);
+          const mergedSkins = Array.from(
+            new Set([...unlockedSkins, ...(cloudSave.unlockedSkins || ['pip'])])
+          );
+          const mergedBiomes = Array.from(
+            new Set([...unlockedBiomes, ...(cloudSave.unlockedBiomes || ['day'])])
+          );
+
+          setHighScore(mergedHigh);
+          setTotalCoins(mergedCoins);
+          setUnlockedSkins(mergedSkins);
+          setUnlockedBiomes(mergedBiomes);
+
+          if (cloudSave.selectedSkinId) {
+            const foundSkin = SKINS.find((s) => s.id === cloudSave.selectedSkinId);
+            if (foundSkin && mergedSkins.includes(foundSkin.id)) {
+              setSelectedSkin(foundSkin);
+            }
+          }
+          if (cloudSave.selectedBiome && mergedBiomes.includes(cloudSave.selectedBiome)) {
+            setSelectedBiome(cloudSave.selectedBiome);
+          }
+
+          await upsertCloudSave(firebaseUser.uid, {
+            displayName:
+              firebaseUser.displayName ||
+              firebaseUser.email?.split('@')[0] ||
+              cloudSave.displayName ||
+              'Arcade Pilot',
+            highScore: mergedHigh,
+            totalCoins: mergedCoins,
+            unlockedSkins: mergedSkins,
+            selectedSkinId: selectedSkin.id,
+            unlockedBiomes: mergedBiomes,
+            selectedBiome,
+            difficulty,
+            crtFilterEnabled,
+            soundEnabled,
+            musicEnabled,
+          });
+        } else {
+          await upsertCloudSave(firebaseUser.uid, {
+            displayName:
+              firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Arcade Pilot',
+            highScore,
+            totalCoins,
+            unlockedSkins,
+            selectedSkinId: selectedSkin.id,
+            unlockedBiomes,
+            selectedBiome,
+            difficulty,
+            crtFilterEnabled,
+            soundEnabled,
+            musicEnabled,
+          });
+        }
+
+        if (cloudHistory.length > 0) {
+          setHistory((prev) => {
+            const byId = new Map<string, HistoryEntry>();
+            [...cloudHistory, ...prev].forEach((item) => {
+              if (!byId.has(item.id)) byId.set(item.id, item);
+            });
+            const merged = Array.from(byId.values()).sort((a, b) => b.timestamp - a.timestamp);
+            try {
+              localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(merged));
+            } catch {
+              // ignore
+            }
+            return merged;
+          });
+        }
+
+        if (!cancelled) {
+          setCloudSyncStatus('synced');
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setCloudSyncStatus('error');
+          setCloudError(err instanceof Error ? err.message : 'Failed to load cloud save');
+        }
+      }
+    };
+
+    syncOnSignIn();
+    return () => {
+      cancelled = true;
+    };
+  }, [firebaseUser]);
 
   // Initialize Game Engine
   useEffect(() => {
@@ -251,6 +454,24 @@ export default function App() {
               soundEnabled,
               musicEnabled
             );
+
+            const activeUser = firebaseUserRef.current;
+            if (activeUser && finalScore > 0) {
+              publishLeaderboardScore(activeUser.uid, {
+                playerName:
+                  activeUser.displayName ||
+                  activeUser.email?.split('@')[0] ||
+                  'Arcade Pilot',
+                score: nextHigh,
+                difficulty,
+                skinId: selectedSkin.id,
+                biomeId: selectedBiome,
+                medalTier: getMedalTierForScore(nextHigh),
+              }).catch((err) => {
+                console.error('Failed to publish leaderboard score:', err);
+              });
+            }
+
             return nextHigh;
           });
           return updated;
@@ -292,6 +513,32 @@ export default function App() {
   // Global Keyboard Event Handlers
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isTyping =
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable);
+
+      if (e.code === 'Escape' && isGmailOpen) {
+        e.preventDefault();
+        retroAudio.playSelect();
+        setIsGmailOpen(false);
+        return;
+      }
+
+      if (e.code === 'Escape' && isCloudModalOpen) {
+        e.preventDefault();
+        retroAudio.playSelect();
+        setIsCloudModalOpen(false);
+        return;
+      }
+
+      if (isTyping || isGmailOpen || isCloudModalOpen) {
+        return;
+      }
+
       if (e.code === 'KeyI') {
         e.preventDefault();
         retroAudio.playSelect();
@@ -312,7 +559,7 @@ export default function App() {
         e.code === 'ShiftLeft' || 
         e.code === 'ShiftRight'
       ) {
-        if (isShopOpen || isInstructionsOpen || isHistoryOpen || isResetModalOpen) return;
+        if (isShopOpen || isInstructionsOpen || isHistoryOpen || isResetModalOpen || isCloudModalOpen) return;
         if (gameState === 'PLAYING') {
           e.preventDefault();
           engineRef.current?.fireLaser();
@@ -321,7 +568,7 @@ export default function App() {
       }
 
       if (e.code === 'KeyR') {
-        if (isShopOpen || isInstructionsOpen || isHistoryOpen || isResetModalOpen) return;
+        if (isShopOpen || isInstructionsOpen || isHistoryOpen || isResetModalOpen || isCloudModalOpen) return;
         if (gameState === 'PLAYING' || gameState === 'PAUSED' || gameState === 'GAMEOVER') {
           e.preventDefault();
           retroAudio.playSelect();
@@ -365,7 +612,7 @@ export default function App() {
 
       if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
         e.preventDefault();
-        if (isShopOpen || isInstructionsOpen || isHistoryOpen || isResetModalOpen) return;
+        if (isShopOpen || isInstructionsOpen || isHistoryOpen || isResetModalOpen || isCloudModalOpen) return;
 
         if (gameState === 'PLAYING') {
           engineRef.current?.flap();
@@ -395,7 +642,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState, isShopOpen, isInstructionsOpen, isHistoryOpen, isResetModalOpen]);
+  }, [gameState, isShopOpen, isInstructionsOpen, isHistoryOpen, isResetModalOpen, isGmailOpen, isCloudModalOpen]);
 
   // Responsive Cabinet & Device Orientation Resize Observer
   useEffect(() => {
@@ -570,6 +817,134 @@ export default function App() {
 
   const handleCloseInstructions = () => {
     setIsInstructionsOpen(false);
+  };
+
+  const handleOpenGmail = (tab: 'inbox' | 'compose' = 'inbox', seed: GmailComposeSeed | null = null) => {
+    if (gameState === 'PLAYING') {
+      engineRef.current?.pause();
+    }
+    retroAudio.playSelect();
+    setGmailInitialTab(tab);
+    setGmailComposeSeed(seed);
+    setIsGmailOpen(true);
+  };
+
+  const handleShareScoreViaGmail = () => {
+    const biomeName = BIOMES[selectedBiome]?.name || selectedBiome;
+    const summaryBody = [
+      'Hey! Check out my latest Flappy Pixel flight:',
+      '',
+      `Run Score: ${currentScore} pts`,
+      `Personal Best: ${highScore} pts`,
+      `Credits Earned: +${runCoins}¢ (Bank: ${totalCoins}¢)`,
+      `Avatar: ${selectedSkin.name}`,
+      `Weather Realm: ${biomeName}`,
+      `Difficulty: ${difficulty.toUpperCase()}`,
+      '',
+      'Can you beat my score in Flappy Pixel?',
+    ].join('\n');
+
+    handleOpenGmail('compose', {
+      subject: `Flappy Pixel Score: ${currentScore} pts (Best: ${highScore})!`,
+      body: summaryBody,
+    });
+  };
+
+  const handleGmailLogin = async () => {
+    setIsLoggingIn(true);
+    setGmailAuthError(null);
+    try {
+      const result = await googleSignIn();
+      firebaseUserRef.current = result.user;
+      setFirebaseUser(result.user);
+      setGmailUser(result.user);
+      setGmailToken(result.accessToken);
+      setNeedsAuth(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Google Sign-In failed or was cancelled.';
+      setGmailAuthError(message);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleGmailLogout = async () => {
+    await gmailLogout();
+    firebaseUserRef.current = null;
+    setFirebaseUser(null);
+    setGmailUser(null);
+    setGmailToken(null);
+    setNeedsAuth(true);
+    setGmailAuthError(null);
+    setCloudAuthError(null);
+    setCloudError(null);
+  };
+
+  const handleOpenLeaderboard = () => {
+    if (gameState === 'PLAYING') {
+      engineRef.current?.pause();
+    }
+    retroAudio.playSelect();
+    setIsCloudModalOpen(true);
+  };
+
+  const handleCloudSignIn = async () => {
+    setIsCloudSigningIn(true);
+    setCloudAuthError(null);
+    try {
+      const signedInUser = await firebaseGoogleSignIn();
+      firebaseUserRef.current = signedInUser;
+      setFirebaseUser(signedInUser);
+      setGmailUser(signedInUser);
+    } catch (err) {
+      setCloudAuthError(
+        err instanceof Error ? err.message : 'Google Sign-In failed or was cancelled.'
+      );
+    } finally {
+      setIsCloudSigningIn(false);
+    }
+  };
+
+  const handleSyncCloudNow = async (customAlias?: string) => {
+    const activeUser = firebaseUserRef.current;
+    if (!activeUser) return;
+    const playerName =
+      customAlias ||
+      activeUser.displayName ||
+      activeUser.email?.split('@')[0] ||
+      'Arcade Pilot';
+
+    setCloudSyncStatus('syncing');
+    setCloudError(null);
+    try {
+      await upsertCloudSave(activeUser.uid, {
+        displayName: playerName,
+        highScore,
+        totalCoins,
+        unlockedSkins,
+        selectedSkinId: selectedSkin.id,
+        unlockedBiomes,
+        selectedBiome,
+        difficulty,
+        crtFilterEnabled,
+        soundEnabled,
+        musicEnabled,
+      });
+
+      await publishLeaderboardScore(activeUser.uid, {
+        playerName,
+        score: highScore,
+        difficulty,
+        skinId: selectedSkin.id,
+        biomeId: selectedBiome,
+        medalTier: getMedalTierForScore(highScore),
+      });
+
+      setCloudSyncStatus('synced');
+    } catch (err) {
+      setCloudSyncStatus('error');
+      setCloudError(err instanceof Error ? err.message : 'Failed to sync to cloud.');
+    }
   };
 
   const handleSelectSkin = (skin: BirdSkin) => {
@@ -824,6 +1199,12 @@ export default function App() {
       musicEnabled
     );
 
+    if (firebaseUserRef.current) {
+      wipeCloudSave(firebaseUserRef.current.uid).catch((err) => {
+        console.error('Failed to wipe cloud save:', err);
+      });
+    }
+
     // Provide immediate visual feedback
     if (resetToastTimeoutRef.current) {
       window.clearTimeout(resetToastTimeoutRef.current);
@@ -930,6 +1311,32 @@ export default function App() {
                 <span className="text-white/40">•</span>
                 <span title="Coins Bank">{totalCoins}¢</span>
               </div>
+            </button>
+
+            <button
+              id="btn-header-gmail"
+              onClick={() => handleOpenGmail('inbox')}
+              className="relative flex items-center gap-1 sm:gap-1.5 rounded-lg border-2 border-[#ea4335]/70 bg-[#ea4335]/15 px-1.5 sm:px-2.5 py-1 text-xs font-black text-[#ea4335] transition-all hover:bg-[#ea4335] hover:text-white cursor-pointer shadow-sm"
+              title="Open Gmail Integration"
+            >
+              <Mail className="size-3 sm:size-3.5 shrink-0" />
+              <span className="hidden sm:inline">GMAIL</span>
+              {!needsAuth && gmailToken && (
+                <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
+              )}
+            </button>
+
+            <button
+              id="btn-header-cloud-leaderboard"
+              onClick={handleOpenLeaderboard}
+              className="relative flex items-center gap-1 sm:gap-1.5 rounded-lg border-2 border-[#38bdf8]/70 bg-[#38bdf8]/15 px-1.5 sm:px-2.5 py-1 text-xs font-black text-[#38bdf8] transition-all hover:bg-[#38bdf8] hover:text-black cursor-pointer shadow-sm"
+              title="Cloud Save & Global Leaderboard"
+            >
+              <Cloud className="size-3 sm:size-3.5 shrink-0" />
+              <span className="hidden sm:inline">CLOUD</span>
+              {firebaseUser && (
+                <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
+              )}
             </button>
 
             <button
@@ -1048,6 +1455,10 @@ export default function App() {
                 retroAudio.playSelect();
                 setIsHistoryOpen(true);
               }}
+              onOpenGmail={() => handleOpenGmail('inbox')}
+              isGmailConnected={!needsAuth && Boolean(gmailToken)}
+              onOpenLeaderboard={handleOpenLeaderboard}
+              isCloudConnected={Boolean(firebaseUser)}
               onSelectDifficulty={handleSelectDifficulty}
               onSelectBiome={handleSelectBiome}
               onToggleCRT={toggleCRT}
@@ -1081,6 +1492,7 @@ export default function App() {
             onOpenShop={handleOpenShop}
             onGoHome={handleGoHome}
             onRequestReset={() => setIsResetModalOpen(true)}
+            onShareGmail={handleShareScoreViaGmail}
           />
 
           {/* Unified Vault Modal: Avatars (x30) & Weathers (x20) */}
@@ -1129,6 +1541,55 @@ export default function App() {
             }}
           />
 
+          {/* Gmail Integration Modal */}
+          <GmailModal
+            isOpen={isGmailOpen}
+            onClose={() => setIsGmailOpen(false)}
+            user={gmailUser}
+            accessToken={gmailToken}
+            needsAuth={needsAuth}
+            isLoggingIn={isLoggingIn}
+            authError={gmailAuthError}
+            onLogin={handleGmailLogin}
+            onLogout={handleGmailLogout}
+            onRequireReauth={() => {
+              setGmailToken(null);
+              setNeedsAuth(true);
+            }}
+            initialTab={gmailInitialTab}
+            initialCompose={gmailComposeSeed}
+            gameContext={{
+              score: currentScore,
+              highScore,
+              totalCoins,
+              skinName: selectedSkin.name,
+              biomeName: BIOMES[selectedBiome]?.name || selectedBiome,
+              difficulty,
+            }}
+          />
+
+          {/* Firebase Cloud Save & Global Leaderboard Modal */}
+          <LeaderboardModal
+            isOpen={isCloudModalOpen}
+            onClose={() => setIsCloudModalOpen(false)}
+            firebaseUser={firebaseUser}
+            isSigningIn={isCloudSigningIn}
+            authError={cloudAuthError}
+            cloudSyncStatus={cloudSyncStatus}
+            cloudError={cloudError}
+            onSignIn={handleCloudSignIn}
+            onSignOut={handleGmailLogout}
+            onSyncNow={handleSyncCloudNow}
+            localStats={{
+              highScore,
+              totalCoins,
+              unlockedSkinsCount: unlockedSkins.length,
+              unlockedBiomesCount: unlockedBiomes.length,
+              selectedSkinName: selectedSkin.name,
+              selectedBiomeName: BIOMES[selectedBiome]?.name || selectedBiome,
+            }}
+          />
+
           {/* Reset Confirmation Toast Banner - Always visible in both Windowed & Fullscreen modes */}
           {resetToastMessage && (
             <div 
@@ -1140,181 +1601,6 @@ export default function App() {
           )}
         </div>
       </main>
-
-      {/* Control Deck Footer - Responsive compact heights on mobile and landscape */}
-      <footer 
-        id="arcade-control-deck"
-        className={`bg-white text-black flex items-center justify-between px-2 sm:px-6 md:px-10 shrink-0 z-30 font-mono transition-all border-t-2 sm:border-t-4 border-black ${
-          isFullscreen 
-            ? 'hidden' 
-            : 'h-13 sm:h-16 md:h-20 landscape:h-11 sm:landscape:h-14'
-        }`}
-      >
-        <div className="flex items-center gap-1.5 sm:gap-4 md:gap-6 overflow-x-auto py-1">
-          <button 
-            type="button"
-            id="btn-footer-home"
-            onClick={handleGoHome}
-            className="flex items-center gap-1 sm:gap-2 text-left focus:outline-none hover:opacity-80 transition-opacity cursor-pointer shrink-0"
-            title="Go to Home Screen"
-          >
-            <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-black text-white flex items-center justify-center font-black rounded-lg text-[9px] sm:text-xs">
-              <Home className="size-3.5 sm:size-4 md:size-5 text-[#f7d302]" />
-            </div>
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter hidden sm:inline">
-              Home
-            </span>
-          </button>
-
-          <button 
-            type="button"
-            id="btn-footer-flap"
-            onClick={() => {
-              if (gameState === 'PLAYING') {
-                engineRef.current?.flap();
-              } else if (gameState === 'PAUSED') {
-                engineRef.current?.resume();
-              } else {
-                handleStartGame();
-              }
-            }}
-            className="flex items-center gap-1 sm:gap-2 text-left focus:outline-none hover:opacity-80 transition-opacity cursor-pointer shrink-0"
-            title="Click or press SPACE to flap/start"
-          >
-            <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-black text-white flex items-center justify-center font-black rounded-lg text-[9px] sm:text-xs">
-              SPCE
-            </div>
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter hidden sm:inline">
-              Jump / Flap
-            </span>
-          </button>
-
-          <button 
-            type="button"
-            id="btn-footer-laser"
-            onClick={() => {
-              if (gameState === 'PLAYING') {
-                engineRef.current?.fireLaser();
-              }
-            }}
-            className="flex items-center gap-1 sm:gap-2 text-left focus:outline-none hover:opacity-80 transition-opacity cursor-pointer shrink-0"
-            title="Fire Flappy Bird Laser Cannon Beam (1 at a time • 0.25s pause • 1 min refill per bar • Hotkey: X)"
-          >
-            <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-black border-2 border-[#ef4444] text-[#ef4444] flex items-center justify-center font-black rounded-lg text-[9px] sm:text-xs shadow-[0_0_8px_rgba(239,68,68,0.4)]">
-              <Zap className="size-3.5 sm:size-4 md:size-5 text-[#ef4444] fill-current" />
-            </div>
-            <div className="hidden sm:flex flex-col">
-              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter text-[#ef4444]">
-                Laser (X)
-              </span>
-              <span className="text-[8px] font-mono text-black/60">
-                {activePowerUps.laserTimer > 0 
-                  ? `HYPER 2s (${Math.ceil(activePowerUps.laserTimer / 1000)}s) ∞` 
-                  : activePowerUps.laserAmmo < 3
-                  ? `AMMO ${activePowerUps.laserAmmo}/3 (${Math.max(1, Math.ceil(60 * (1 - (activePowerUps.laserRechargeProgress ?? 1))))}s)`
-                  : 'AMMO 3/3 (READY)'}
-              </span>
-            </div>
-          </button>
-
-          <button 
-            type="button"
-            id="btn-footer-pause"
-            onClick={() => {
-              if (gameState === 'PLAYING') engineRef.current?.pause();
-              else if (gameState === 'PAUSED') engineRef.current?.resume();
-            }}
-            className="flex items-center gap-1 sm:gap-2 text-left focus:outline-none hover:opacity-80 transition-opacity cursor-pointer shrink-0"
-            title="Pause game"
-          >
-            <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-black text-white flex items-center justify-center font-black rounded-lg text-[9px] sm:text-xs">
-              ESC
-            </div>
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter hidden sm:inline">
-              Pause Menu
-            </span>
-          </button>
-
-          <button 
-            type="button"
-            id="btn-footer-instructions"
-            onClick={handleOpenInstructions}
-            className="flex items-center gap-1 sm:gap-2 text-left focus:outline-none hover:opacity-80 transition-opacity cursor-pointer shrink-0"
-            title="How to Play / Instructions (I)"
-          >
-            <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-black text-[#f7d302] flex items-center justify-center font-black rounded-lg text-[9px] sm:text-xs">
-              <HelpCircle className="size-3.5 sm:size-4 md:size-5 text-[#f7d302]" />
-            </div>
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter hidden md:inline">
-              HOW TO PLAY
-            </span>
-          </button>
-
-          <button 
-            type="button"
-            id="btn-footer-fullscreen"
-            onClick={toggleFullscreen}
-            className="flex items-center gap-1 sm:gap-2 text-left focus:outline-none hover:opacity-80 transition-opacity cursor-pointer shrink-0"
-            title="Toggle Fullscreen Mode (F)"
-          >
-            <div className={`w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center font-black rounded-lg text-[9px] sm:text-xs transition-colors ${
-              isFullscreen ? 'bg-black text-[#f7d302]' : 'bg-black text-white'
-            }`}>
-              {isFullscreen ? <Minimize2 className="size-3.5 sm:size-4 md:size-5" /> : <Maximize2 className="size-3.5 sm:size-4 md:size-5" />}
-            </div>
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter hidden md:inline">
-              {isFullscreen ? 'WINDOW' : 'FULL (F)'}
-            </span>
-          </button>
-
-          <button 
-            type="button"
-            id="btn-footer-crt"
-            onClick={toggleCRT}
-            className="flex items-center gap-1 sm:gap-2 text-left focus:outline-none hover:opacity-80 transition-opacity cursor-pointer shrink-0"
-            title="Toggle CRT Scanlines (C)"
-          >
-            <div className={`w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center font-black rounded-lg text-[9px] sm:text-xs transition-colors ${
-              crtFilterEnabled ? 'bg-black text-[#f7d302]' : 'bg-zinc-300 text-zinc-600'
-            }`}>
-              CRT
-            </div>
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter hidden md:inline">
-              {crtFilterEnabled ? 'CRT ON' : 'CRT OFF'}
-            </span>
-          </button>
-
-          <button 
-            type="button"
-            id="btn-footer-reset-game"
-            onClick={() => {
-              retroAudio.playSelect();
-              setIsResetModalOpen(true);
-            }}
-            className="flex items-center gap-1 sm:gap-2 text-left focus:outline-none hover:opacity-80 transition-opacity cursor-pointer shrink-0"
-            title="Restart Game (Lock all weathers & avatars, reset coins to 0¢)"
-          >
-            <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-[#f25022]/15 border-2 border-[#f25022] text-[#f25022] flex items-center justify-center font-black rounded-lg text-[9px] sm:text-xs hover:bg-[#f25022] hover:text-white transition-colors">
-              <RotateCcw className="size-3.5 sm:size-4 md:size-5" />
-            </div>
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter text-[#f25022] hidden lg:inline">
-              Reset Save
-            </span>
-          </button>
-        </div>
-
-        <div className="flex items-center gap-3 sm:gap-8 shrink-0">
-          <div className="text-right">
-            <p className="text-[8px] sm:text-[9px] uppercase font-bold text-black/40">Seed</p>
-            <p className="text-[10px] sm:text-xs font-black font-mono">A7-X82</p>
-          </div>
-          <div className="h-6 sm:h-8 w-[1px] bg-black/15 hidden sm:block" />
-          <div className="text-right hidden sm:block">
-            <p className="text-[8px] sm:text-[9px] uppercase font-bold text-black/40">Core</p>
-            <p className="text-[10px] sm:text-xs font-black font-mono">PERLIN_NOISE</p>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
