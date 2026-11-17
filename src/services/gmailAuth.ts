@@ -92,3 +92,30 @@ export const logout = async () => {
   cachedAccessToken = null;
   await auth.signOut();
 };
+
+export const formatFirebaseAuthError = (err: unknown): string => {
+  const code =
+    typeof err === 'object' && err !== null && 'code' in err
+      ? String((err as { code?: unknown }).code || '')
+      : '';
+  const rawMessage =
+    err instanceof Error ? err.message : 'Google Sign-In failed or was cancelled.';
+
+  if (code === 'auth/unauthorized-domain' || rawMessage.includes('auth/unauthorized-domain')) {
+    const host =
+      typeof window !== 'undefined' && window.location?.hostname
+        ? window.location.hostname
+        : 'this domain';
+    return `Domain "${host}" is not authorized for Firebase Sign-In. Add "${host}" in Firebase Console → Authentication → Settings → Authorized domains.`;
+  }
+
+  if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+    return 'Google Sign-In popup was closed before finishing. Click Sign in with Google and click Continue to authorize.';
+  }
+
+  if (code === 'auth/popup-blocked') {
+    return 'Sign-in popup was blocked by your browser. Please allow popups for this site and try again.';
+  }
+
+  return rawMessage;
+};

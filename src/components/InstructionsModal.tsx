@@ -372,13 +372,6 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, on
                   </div>
 
                   <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-                    <span className="text-white/70">CRT Scanline Shader</span>
-                    <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-white/20 text-[#73bf2e] font-black text-[10px]">
-                      C KEY
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2">
                     <span className="text-white/70">Fullscreen Mode</span>
                     <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-white/20 text-white font-black text-[10px]">
                       F KEY

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Difficulty, BiomeType, BirdSkin } from '../types';
 import { BIOMES, BIOME_ITEMS } from '../game/pixelArt';
-import { Play, Sparkles, Trophy, Tv, Volume2, VolumeX, Music, CloudSun, Lock, RotateCcw, Maximize2, Minimize2, HelpCircle, History, Mail, Cloud } from 'lucide-react';
+import { Play, Sparkles, Trophy, Volume2, VolumeX, Music, CloudSun, Lock, RotateCcw, Maximize2, Minimize2, HelpCircle, History, Mail, Cloud } from 'lucide-react';
 import { retroAudio } from '../game/audio';
 
 interface MenuScreenProps {
@@ -11,7 +11,6 @@ interface MenuScreenProps {
   selectedBiome: BiomeType;
   unlockedBiomes: string[];
   selectedSkin: BirdSkin;
-  crtFilterEnabled: boolean;
   soundEnabled: boolean;
   musicEnabled: boolean;
   isFullscreen?: boolean;
@@ -25,7 +24,6 @@ interface MenuScreenProps {
   isCloudConnected?: boolean;
   onSelectDifficulty: (diff: Difficulty) => void;
   onSelectBiome: (biome: BiomeType) => void;
-  onToggleCRT: () => void;
   onToggleSound: () => void;
   onToggleMusic: () => void;
   onToggleFullscreen?: () => void;
@@ -39,7 +37,6 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({
   selectedBiome,
   unlockedBiomes,
   selectedSkin,
-  crtFilterEnabled,
   soundEnabled,
   musicEnabled,
   isFullscreen,
@@ -53,7 +50,6 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({
   isCloudConnected,
   onSelectDifficulty,
   onSelectBiome,
-  onToggleCRT,
   onToggleSound,
   onToggleMusic,
   onToggleFullscreen,
@@ -203,19 +199,6 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({
               )}
             </button>
           )}
-
-          <button
-            id="btn-menu-crt"
-            onClick={onToggleCRT}
-            className={`flex size-7 sm:size-8 md:size-10 lg:size-11 items-center justify-center rounded-lg border-2 transition-colors cursor-pointer shadow-md ${
-              crtFilterEnabled
-                ? 'border-[#73bf2e] bg-[#73bf2e]/20 text-[#73bf2e] shadow-[0_0_10px_rgba(115,191,46,0.3)]'
-                : 'border-white/20 bg-black/80 text-white/40'
-            }`}
-            title="Toggle CRT Scanline Shader"
-          >
-            <Tv className="size-3.5 sm:size-4 md:size-5" />
-          </button>
 
           <button
             id="btn-menu-sound"

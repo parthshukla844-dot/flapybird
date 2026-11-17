@@ -16,8 +16,7 @@ import {
   HelpCircle,
   RotateCcw,
   CloudSun,
-  History,
-  Tv
+  History
 } from 'lucide-react';
 import { retroAudio } from '../game/audio';
 
@@ -31,12 +30,10 @@ interface ArcadeHUDProps {
   isPaused: boolean;
   soundEnabled: boolean;
   musicEnabled: boolean;
-  crtFilterEnabled?: boolean;
   isFullscreen?: boolean;
   onTogglePause: () => void;
   onToggleSound: () => void;
   onToggleMusic: () => void;
-  onToggleCRT?: () => void;
   onToggleFullscreen?: () => void;
   onOpenInstructions?: () => void;
   onOpenShop?: (tab?: 'avatars' | 'weathers') => void;
@@ -59,12 +56,10 @@ export const ArcadeHUD: React.FC<ArcadeHUDProps> = ({
   isPaused,
   soundEnabled,
   musicEnabled,
-  crtFilterEnabled,
   isFullscreen,
   onTogglePause,
   onToggleSound,
   onToggleMusic,
-  onToggleCRT,
   onToggleFullscreen,
   onOpenInstructions,
   onOpenShop,
@@ -298,27 +293,6 @@ export const ArcadeHUD: React.FC<ArcadeHUDProps> = ({
             >
               <Music className={`size-3.5 sm:size-4 md:size-4.5 ${musicEnabled ? 'text-[#73bf2e]' : 'text-zinc-500'}`} />
             </button>
-
-            {onToggleCRT && (
-              <button
-                id="btn-hud-crt"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  retroAudio.playSelect();
-                  onToggleCRT();
-                }}
-                onTouchStart={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                className={`hidden sm:flex size-7 sm:size-8 md:size-9 lg:size-10 items-center justify-center rounded-lg border-2 transition-all active:scale-90 cursor-pointer shadow-md ${
-                  crtFilterEnabled
-                    ? 'border-[#73bf2e] bg-[#73bf2e]/20 text-[#73bf2e]'
-                    : 'border-white/20 bg-black/85 text-white/40 hover:border-white hover:text-white'
-                }`}
-                title="Toggle CRT Scanline Shader (C)"
-              >
-                <Tv className="size-3.5 sm:size-4 md:size-4.5" />
-              </button>
-            )}
 
             {onToggleFullscreen && (
               <button

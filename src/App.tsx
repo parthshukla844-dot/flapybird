@@ -10,7 +10,6 @@ import {
 import { SKINS, BIOMES, BIOME_ITEMS } from './game/pixelArt';
 import { FlappyEngine } from './game/engine';
 import { retroAudio } from './game/audio';
-import { CRTOverlay } from './components/CRTOverlay';
 import { ArcadeHUD } from './components/ArcadeHUD';
 import { MenuScreen } from './components/MenuScreen';
 import { GameOverModal } from './components/GameOverModal';
@@ -21,7 +20,7 @@ import { InstructionsModal } from './components/InstructionsModal';
 import { HistoryModal } from './components/HistoryModal';
 import { GmailModal, GmailComposeSeed } from './components/GmailModal';
 import { LeaderboardModal } from './components/LeaderboardModal';
-import { initAuth, googleSignIn, firebaseGoogleSignIn, logout as gmailLogout } from './services/gmailAuth';
+import { initAuth, googleSignIn, firebaseGoogleSignIn, logout as gmailLogout, formatFirebaseAuthError } from './services/gmailAuth';
 import {
   loadCloudSave,
   upsertCloudSave,
@@ -51,7 +50,7 @@ export default function App() {
   const [unlockedBiomes, setUnlockedBiomes] = useState<string[]>(['day']);
   const [selectedBiome, setSelectedBiome] = useState<BiomeType>('day');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
-  const [crtFilterEnabled, setCrtFilterEnabled] = useState<boolean>(true);
+  const crtFilterEnabled = false;
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [musicEnabled, setMusicEnabled] = useState<boolean>(true);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -152,7 +151,6 @@ export default function App() {
         } else {
           setSelectedBiome('day');
         }
-        if (typeof parsed.crtFilterEnabled === 'boolean') setCrtFilterEnabled(parsed.crtFilterEnabled);
         if (typeof parsed.soundEnabled === 'boolean') {
           setSoundEnabled(parsed.soundEnabled);
           retroAudio.setSoundEnabled(parsed.soundEnabled);
@@ -631,9 +629,6 @@ export default function App() {
       } else if (e.code === 'KeyM') {
         e.preventDefault();
         toggleSound();
-      } else if (e.code === 'KeyC') {
-        e.preventDefault();
-        toggleCRT();
       } else if (e.code === 'KeyF') {
         e.preventDefault();
         toggleFullscreen();
@@ -861,8 +856,7 @@ export default function App() {
       setGmailToken(result.accessToken);
       setNeedsAuth(false);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Google Sign-In failed or was cancelled.';
-      setGmailAuthError(message);
+      setGmailAuthError(formatFirebaseAuthError(err));
     } finally {
       setIsLoggingIn(false);
     }
@@ -897,9 +891,7 @@ export default function App() {
       setFirebaseUser(signedInUser);
       setGmailUser(signedInUser);
     } catch (err) {
-      setCloudAuthError(
-        err instanceof Error ? err.message : 'Google Sign-In failed or was cancelled.'
-      );
+      setCloudAuthError(formatFirebaseAuthError(err));
     } finally {
       setIsCloudSigningIn(false);
     }
@@ -1080,25 +1072,6 @@ export default function App() {
       soundEnabled,
       musicEnabled
     );
-  };
-
-  const toggleCRT = () => {
-    setCrtFilterEnabled((prev) => {
-      const next = !prev;
-      saveState(
-        highScore,
-        totalCoins,
-        unlockedSkins,
-        selectedSkin.id,
-        unlockedBiomes,
-        selectedBiome,
-        difficulty,
-        next,
-        soundEnabled,
-        musicEnabled
-      );
-      return next;
-    });
   };
 
   const toggleSound = () => {
@@ -1385,9 +1358,6 @@ export default function App() {
             className="h-full w-full block image-render-pixelated cursor-pointer"
           />
 
-          {/* CRT Scanline & Phosphor Overlay */}
-          <CRTOverlay enabled={crtFilterEnabled} />
-
           {/* In-Game Heads-Up Display (Live) */}
           {(gameState === 'PLAYING' || gameState === 'PAUSED') && (
             <ArcadeHUD
@@ -1400,7 +1370,6 @@ export default function App() {
               isPaused={gameState === 'PAUSED'}
               soundEnabled={soundEnabled}
               musicEnabled={musicEnabled}
-              crtFilterEnabled={crtFilterEnabled}
               isFullscreen={isFullscreen}
               onTogglePause={() => {
                 if (gameState === 'PLAYING') {
@@ -1411,7 +1380,6 @@ export default function App() {
               }}
               onToggleSound={toggleSound}
               onToggleMusic={toggleMusic}
-              onToggleCRT={toggleCRT}
               onToggleFullscreen={toggleFullscreen}
               onOpenInstructions={handleOpenInstructions}
               onOpenShop={handleOpenShop}
@@ -1444,7 +1412,6 @@ export default function App() {
               selectedBiome={selectedBiome}
               unlockedBiomes={unlockedBiomes}
               selectedSkin={selectedSkin}
-              crtFilterEnabled={crtFilterEnabled}
               soundEnabled={soundEnabled}
               musicEnabled={musicEnabled}
               isFullscreen={isFullscreen}
@@ -1461,7 +1428,6 @@ export default function App() {
               isCloudConnected={Boolean(firebaseUser)}
               onSelectDifficulty={handleSelectDifficulty}
               onSelectBiome={handleSelectBiome}
-              onToggleCRT={toggleCRT}
               onToggleSound={toggleSound}
               onToggleMusic={toggleMusic}
               onToggleFullscreen={toggleFullscreen}
