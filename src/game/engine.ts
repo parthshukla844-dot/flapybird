@@ -29,6 +29,9 @@ export interface GameEngineCallbacks {
   onCoinsChange: (coins: number) => void;
   onStateChange: (state: GameState) => void;
   onGameOver: (finalScore: number, coinsEarned: number, newHighScore: boolean) => void;
+  onCoinCollect?: (amount: number) => void;
+  onLaserDestroy?: () => void;
+  onPowerUpCollect?: (type: PowerUpItem['type']) => void;
 }
 
 export class FlappyEngine {
@@ -101,6 +104,8 @@ export class FlappyEngine {
   public runCoins = 0;
   public totalFlaps = 0;
   public highScore = 0;
+  public streakCoinMultiplier = 1;
+  private coinFraction = 0;
 
   // Scroll & Generator
   private groundOffset = 0;
@@ -174,6 +179,22 @@ export class FlappyEngine {
     this.highScore = hs;
   }
 
+  public setStreakMultiplier(multiplier: number) {
+    this.streakCoinMultiplier = Math.max(1, multiplier);
+  }
+
+  private awardRunCoins(baseAmount: number): number {
+    const exact = baseAmount * this.streakCoinMultiplier + this.coinFraction;
+    const awarded = Math.floor(exact + 1e-9);
+    this.coinFraction = Math.max(0, exact - awarded);
+    if (awarded > 0) {
+      this.runCoins += awarded;
+      this.callbacks.onCoinsChange(this.runCoins);
+      this.callbacks.onCoinCollect?.(awarded);
+    }
+    return awarded;
+  }
+
   /**
    * Start a new game session
    */
@@ -188,6 +209,7 @@ export class FlappyEngine {
     this.state = 'PLAYING';
     this.score = 0;
     this.runCoins = 0;
+    this.coinFraction = 0;
     this.birdY = this.height / 2 - 40;
     this.birdVy = 0;
     this.birdRotation = 0;
@@ -391,6 +413,7 @@ export class FlappyEngine {
       // Award bonus points and score popup
       this.score += 2;
       this.callbacks.onScoreChange(this.score);
+      this.callbacks.onLaserDestroy?.();
       this.addScorePopup(hitX, hitY - 24, '+2 LASER DESTROY!', '#F43F5E');
 
       // Obliterate the obstacle!
@@ -752,23 +775,20 @@ export class FlappyEngine {
 
         // Cool Swag Pip perk: Swag Cashback (+1 coin on every 3rd pipe)
         if (this.selectedSkin.id === 'shades' && this.score % 3 === 0) {
-          this.runCoins += 1;
-          this.callbacks.onCoinsChange(this.runCoins);
-          this.addScorePopup(this.birdX + 25, this.birdY - 28, '+1¢ SWAG!', '#FACC15');
+          const awarded = this.awardRunCoins(1);
+          this.addScorePopup(this.birdX + 25, this.birdY - 28, `+${awarded}¢ SWAG!`, '#FACC15');
         }
 
         // Amethyst Owl perk: Wisdom Scout (+1 coin every 5 points)
         if (this.selectedSkin.id === 'violet' && this.score % 5 === 0) {
-          this.runCoins += 1;
-          this.callbacks.onCoinsChange(this.runCoins);
-          this.addScorePopup(this.birdX + 25, this.birdY - 28, '+1¢ WISDOM!', '#8B5CF6');
+          const awarded = this.awardRunCoins(1);
+          this.addScorePopup(this.birdX + 25, this.birdY - 28, `+${awarded}¢ WISDOM!`, '#8B5CF6');
         }
 
         // Fiesta Pip perk: Confetti Jackpot (+5 coins every 10 points)
         if (this.selectedSkin.id === 'party' && this.score % 10 === 0) {
-          this.runCoins += 5;
-          this.callbacks.onCoinsChange(this.runCoins);
-          this.addScorePopup(this.birdX + 25, this.birdY - 32, '+5¢ JACKPOT!', '#F43F5E');
+          const awarded = this.awardRunCoins(5);
+          this.addScorePopup(this.birdX + 25, this.birdY - 32, `+${awarded}¢ JACKPOT!`, '#F43F5E');
         }
 
         // Milestone fireworks
@@ -845,12 +865,17 @@ export class FlappyEngine {
           const multiplier = this.activePowerUps.multiplierTimer > 0 ? 2 : 1;
           // Retro Sunset perk: Golden Hour Surplus (+1¢ to every coin collected)
           const extraSunsetCoin = this.selectedBiome === 'sunset' ? 1 : 0;
-          const coinVal = (coin.value + extraSunsetCoin) * multiplier;
-          this.runCoins += coinVal;
-          this.callbacks.onCoinsChange(this.runCoins);
+          const baseCoinVal = (coin.value + extraSunsetCoin) * multiplier;
+          const coinVal = this.awardRunCoins(baseCoinVal);
           retroAudio.playCoin();
 
-          this.addScorePopup(coin.x, coin.y - 10, `+${coinVal}¢`, '#FACC15');
+          const streakBoosted = this.streakCoinMultiplier > 1 && coinVal > baseCoinVal;
+          this.addScorePopup(
+            coin.x,
+            coin.y - 10,
+            streakBoosted ? `+${coinVal}¢ 🔥` : `+${coinVal}¢`,
+            streakBoosted ? '#FB923C' : '#FACC15'
+          );
           this.createSparkleParticles(coin.x, coin.y, '#FDE047');
         }
       }
@@ -885,6 +910,7 @@ export class FlappyEngine {
         if (dist < hitRadius) {
           pw.collected = true;
           this.applyPowerUp(pw.type);
+          this.callbacks.onPowerUpCollect?.(pw.type);
           retroAudio.playPowerUp();
           this.createSparkleParticles(pw.x, pw.y, '#38BDF8');
         }

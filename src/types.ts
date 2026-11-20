@@ -177,3 +177,67 @@ export interface HistoryEntry {
     skinName?: string;
   };
 }
+
+export interface ParallaxOffsets {
+  skyDetail: number;
+  far: number;
+  clouds: number;
+  mid: number;
+  near: number;
+}
+
+export interface BiomeParallaxConfig {
+  skyDetailSpeed: number;
+  farSpeed: number;
+  cloudSpeed: number;
+  midSpeed: number;
+  nearSpeed: number;
+  ambientCloudDrift: number; // px/sec subtle wind drift
+}
+
+export type DailyMissionType =
+  | 'score_biome'
+  | 'score_difficulty'
+  | 'coins_total'
+  | 'laser_destroy'
+  | 'powerup_collect'
+  | 'games_played';
+
+export interface DailyMission {
+  id: string;
+  type: DailyMissionType;
+  title: string;
+  description: string;
+  target: number;
+  progress: number;
+  rewardCoins: number;
+  completed: boolean;
+  completedAt?: number;
+  claimed?: boolean;
+  claimedAt?: number;
+  biome?: BiomeType;
+  difficulty?: Difficulty;
+}
+
+export interface DailyMissionsState {
+  dateKey: string; // YYYY-MM-DD
+  missions: DailyMission[];
+}
+
+export interface DailyStreakState {
+  currentStreak: number;
+  bestStreak: number;
+  lastPlayedDate: string | null; // YYYY-MM-DD local calendar date
+}
+
+export interface DailyMissionDayRecord {
+  dateKey: string; // YYYY-MM-DD
+  shortLabel: string; // e.g., "Mon", "Today"
+  monthDay: string; // e.g., "Nov 18"
+  completed: number;
+  total: number;
+  bonusCoinsEarned: number;
+  isToday: boolean;
+}
+
+

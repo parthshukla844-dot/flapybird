@@ -18,11 +18,11 @@ class RetroAudioEngine {
       this.ctx = new AudioCtxClass();
       
       this.sfxGain = this.ctx.createGain();
-      this.sfxGain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+      this.sfxGain.gain.setValueAtTime(this.soundEnabled ? 0.3 : 0, this.ctx.currentTime);
       this.sfxGain.connect(this.ctx.destination);
 
       this.musicGain = this.ctx.createGain();
-      this.musicGain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+      this.musicGain.gain.setValueAtTime(this.musicEnabled ? 0.12 : 0, this.ctx.currentTime);
       this.musicGain.connect(this.ctx.destination);
     }
     if (this.ctx.state === 'suspended') {

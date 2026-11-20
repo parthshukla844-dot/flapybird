@@ -381,7 +381,14 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, on
                   <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2">
                     <span className="text-white/70">Open Instructions</span>
                     <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-white/20 text-[#38bdf8] font-black text-[10px]">
-                      I / H KEY
+                      I KEY
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                    <span className="text-white/70">Toggle SFX / Music</span>
+                    <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-white/20 text-[#73bf2e] font-black text-[10px]">
+                      S / M KEY
                     </span>
                   </div>
                 </div>
@@ -398,9 +405,8 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, on
                   <span>10-SECOND TOP-RIGHT SLIDING BAR SYSTEM</span>
                 </div>
                 <p className="text-white/80 leading-relaxed text-[10px] sm:text-xs">
-                  Whenever you grab an advantage orb, it stays active for <strong className="text-white">10 seconds</strong>.
-                  A visual <strong className="text-[#38bdf8]">sliding gauge bar</strong> appears at the top-right of your screen,
-                  smoothly counting down the remaining duration!
+                  Whenever you grab an advantage orb, it stays active for <strong className="text-white">10 seconds</strong> (2s for Hyper Laser).
+                  A visual <strong className="text-[#38bdf8]">sliding gauge bar</strong> appears at the top-right of your screen—and if you collect multiple advantages at the same time, they all stack together inside the same sliding bar!
                 </p>
               </div>
 

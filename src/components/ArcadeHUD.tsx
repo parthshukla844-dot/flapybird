@@ -26,6 +26,7 @@ interface ArcadeHUDProps {
   totalCoins?: number;
   highScore: number;
   difficulty: Difficulty;
+  selectedSkinId?: string;
   activePowerUps: ActivePowerUps;
   isPaused: boolean;
   soundEnabled: boolean;
@@ -52,6 +53,7 @@ export const ArcadeHUD: React.FC<ArcadeHUDProps> = ({
   totalCoins = 0,
   highScore,
   difficulty,
+  selectedSkinId,
   activePowerUps,
   isPaused,
   soundEnabled,
@@ -74,14 +76,18 @@ export const ArcadeHUD: React.FC<ArcadeHUDProps> = ({
   const maxLaserAmmo = activePowerUps.maxLaserAmmo ?? 3;
   const rechargeProgress = activePowerUps.laserRechargeProgress ?? (laserAmmo < maxLaserAmmo ? 0.5 : 1);
 
-  // Determine active advantages for the sliding bars
+  const isCyberOverclock = selectedSkinId === 'cyber';
+  const standardMaxDuration = isCyberOverclock ? 13000 : ADVANTAGE_DURATION_MS;
+  const laserMaxDuration = isCyberOverclock ? 5000 : 2000;
+
+  // Determine active advantages for the unified sliding bar
   const advantagesList = [
     {
       id: 'laser',
       name: 'HYPER LASER',
       active: activePowerUps.laserTimer > 0,
       timer: activePowerUps.laserTimer,
-      maxDuration: 2000,
+      maxDuration: laserMaxDuration,
       icon: <Zap className="size-3.5 text-[#ef4444] shrink-0 fill-current" />,
       color: '#ef4444',
       barColor: 'bg-[#ef4444]',
@@ -93,7 +99,7 @@ export const ArcadeHUD: React.FC<ArcadeHUDProps> = ({
       name: 'SHIELD',
       active: activePowerUps.shield && (activePowerUps.shieldTimer ?? 0) > 0,
       timer: activePowerUps.shieldTimer ?? 0,
-      maxDuration: ADVANTAGE_DURATION_MS,
+      maxDuration: standardMaxDuration,
       icon: <Shield className="size-3.5 text-[#38bdf8] shrink-0" />,
       color: '#38bdf8',
       barColor: 'bg-[#38bdf8]',
@@ -105,7 +111,7 @@ export const ArcadeHUD: React.FC<ArcadeHUDProps> = ({
       name: '2X COINS',
       active: activePowerUps.multiplierTimer > 0,
       timer: activePowerUps.multiplierTimer,
-      maxDuration: ADVANTAGE_DURATION_MS,
+      maxDuration: standardMaxDuration,
       icon: <Sparkles className="size-3.5 text-[#facc15] shrink-0" />,
       color: '#facc15',
       barColor: 'bg-[#facc15]',
@@ -117,7 +123,7 @@ export const ArcadeHUD: React.FC<ArcadeHUDProps> = ({
       name: 'MINI BIRD',
       active: activePowerUps.shrinkTimer > 0,
       timer: activePowerUps.shrinkTimer,
-      maxDuration: ADVANTAGE_DURATION_MS,
+      maxDuration: standardMaxDuration,
       icon: <Minimize className="size-3.5 text-[#34d399] shrink-0" />,
       color: '#34d399',
       barColor: 'bg-[#34d399]',
@@ -129,7 +135,7 @@ export const ArcadeHUD: React.FC<ArcadeHUDProps> = ({
       name: 'SLOW-MO',
       active: activePowerUps.slowmoTimer > 0,
       timer: activePowerUps.slowmoTimer,
-      maxDuration: ADVANTAGE_DURATION_MS,
+      maxDuration: standardMaxDuration,
       icon: <Zap className="size-3.5 text-[#c084fc] shrink-0" />,
       color: '#c084fc',
       barColor: 'bg-[#c084fc]',
@@ -264,35 +270,77 @@ export const ArcadeHUD: React.FC<ArcadeHUDProps> = ({
               </button>
             )}
 
-            <button
-              id="btn-toggle-sound"
-              onClick={(e) => {
-                e.stopPropagation();
-                retroAudio.playSelect();
-                onToggleSound();
-              }}
-              onTouchStart={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              className="flex size-7 sm:size-8 md:size-9 lg:size-10 items-center justify-center rounded-lg border-2 border-white/20 bg-black/85 text-white/80 transition-all active:scale-90 hover:border-white hover:text-white cursor-pointer shadow-md"
-              title={soundEnabled ? 'Mute Sound Effects' : 'Enable Sound Effects'}
+            {/* Granular Audio Controls: Individual SFX & Background Music Toggles */}
+            <div
+              id="hud-audio-controls"
+              className="flex items-center gap-0.5 rounded-lg border-2 border-white/20 bg-black/90 p-0.5 shadow-md"
+              role="group"
+              aria-label="Audio Controls"
             >
-              {soundEnabled ? <Volume2 className="size-3.5 sm:size-4 md:size-4.5 text-[#73bf2e]" /> : <VolumeX className="size-3.5 sm:size-4 md:size-4.5 text-[#f25022]" />}
-            </button>
+              <button
+                id="btn-toggle-sound"
+                type="button"
+                aria-pressed={soundEnabled}
+                aria-label={soundEnabled ? 'Mute Sound Effects' : 'Unmute Sound Effects'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSound();
+                }}
+                onTouchStart={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                className={`flex h-6 sm:h-7 md:h-8 lg:h-9 items-center gap-1 rounded-md border px-1.5 sm:px-2 transition-all active:scale-95 cursor-pointer ${
+                  soundEnabled
+                    ? 'border-[#73bf2e]/60 bg-[#73bf2e]/15 text-[#73bf2e] hover:bg-[#73bf2e]/25'
+                    : 'border-[#f25022]/50 bg-[#f25022]/10 text-[#f25022]/90 hover:border-[#f25022] hover:text-[#f25022]'
+                }`}
+                title={soundEnabled ? 'Sound Effects: ON — Click to Mute SFX (S)' : 'Sound Effects: OFF — Click to Enable SFX (S)'}
+              >
+                {soundEnabled ? (
+                  <Volume2 className="size-3.5 sm:size-4 shrink-0" />
+                ) : (
+                  <VolumeX className="size-3.5 sm:size-4 shrink-0" />
+                )}
+                <span className={`font-mono text-[8px] sm:text-[9px] md:text-[10px] font-black tracking-wider ${!soundEnabled ? 'line-through opacity-75' : ''}`}>
+                  SFX
+                </span>
+              </button>
 
-            <button
-              id="btn-toggle-music"
-              onClick={(e) => {
-                e.stopPropagation();
-                retroAudio.playSelect();
-                onToggleMusic();
-              }}
-              onTouchStart={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              className="flex size-7 sm:size-8 md:size-9 lg:size-10 items-center justify-center rounded-lg border-2 border-white/20 bg-black/85 text-white/80 transition-all active:scale-90 hover:border-white hover:text-white cursor-pointer shadow-md"
-              title={musicEnabled ? 'Mute Chiptune Music' : 'Enable Chiptune Music'}
-            >
-              <Music className={`size-3.5 sm:size-4 md:size-4.5 ${musicEnabled ? 'text-[#73bf2e]' : 'text-zinc-500'}`} />
-            </button>
+              <div className="h-4 w-[1px] bg-white/15" />
+
+              <button
+                id="btn-toggle-music"
+                type="button"
+                aria-pressed={musicEnabled}
+                aria-label={musicEnabled ? 'Mute Background Music' : 'Unmute Background Music'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (soundEnabled) retroAudio.playSelect();
+                  onToggleMusic();
+                }}
+                onTouchStart={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                className={`flex h-6 sm:h-7 md:h-8 lg:h-9 items-center gap-1 rounded-md border px-1.5 sm:px-2 transition-all active:scale-95 cursor-pointer ${
+                  musicEnabled
+                    ? 'border-[#4ec0ca]/60 bg-[#4ec0ca]/15 text-[#4ec0ca] hover:bg-[#4ec0ca]/25'
+                    : 'border-white/15 bg-black/70 text-zinc-400 hover:border-white/40 hover:text-white'
+                }`}
+                title={musicEnabled ? 'Background Music: ON — Click to Mute Music (M)' : 'Background Music: OFF — Click to Enable Music (M)'}
+              >
+                <span className="relative inline-flex items-center justify-center shrink-0">
+                  <Music className={`size-3.5 sm:size-4 ${musicEnabled ? 'text-[#4ec0ca]' : 'text-zinc-500'}`} />
+                  {!musicEnabled && (
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute w-4 sm:w-4.5 h-[2px] -rotate-45 rounded-full bg-[#f25022] shadow-[0_0_4px_#000]"
+                    />
+                  )}
+                </span>
+                <span className={`font-mono text-[8px] sm:text-[9px] md:text-[10px] font-black tracking-wider ${!musicEnabled ? 'line-through text-zinc-500' : ''}`}>
+                  <span className="sm:hidden">BGM</span>
+                  <span className="hidden sm:inline">MUSIC</span>
+                </span>
+              </button>
+            </div>
 
             {onToggleFullscreen && (
               <button
@@ -344,53 +392,86 @@ export const ArcadeHUD: React.FC<ArcadeHUDProps> = ({
             </button>
           </div>
 
-          {/* Top-Right: 10-Second Sliding Bars for Advantages (Hyper Laser, 2x, mini, slow motion, shield) */}
+          {/* Top-Right: Unified Sliding Bar for Single or Simultaneous Active Advantages */}
           {activeAdvantages.length > 0 && (
-            <div 
-              id="top-right-advantage-bars" 
-              className="flex flex-col items-end gap-1.5 w-36 sm:w-44 md:w-52 transition-all duration-200"
+            <div
+              id="top-right-advantage-bars"
+              className={`flex flex-col w-40 sm:w-48 md:w-56 rounded-lg border-2 ${
+                activeAdvantages.length > 1
+                  ? 'border-[#f7d302]/75'
+                  : activeAdvantages[0].borderColor
+              } bg-black/90 p-1.5 sm:p-2 shadow-lg backdrop-blur-sm transition-all duration-200`}
+              style={{
+                boxShadow:
+                  activeAdvantages.length > 1
+                    ? '0 0 18px rgba(247,211,2,0.35)'
+                    : activeAdvantages[0].glowShadow,
+              }}
             >
-              {activeAdvantages.map((adv) => {
-                const maxDur = adv.maxDuration ?? ADVANTAGE_DURATION_MS;
-                const progressRatio = Math.max(0, Math.min(1, adv.timer / maxDur));
-                const progressPercent = Math.round(progressRatio * 100);
-
-                return (
-                  <div
-                    key={adv.id}
-                    id={`top-right-sliding-bar-${adv.id}`}
-                    className={`flex flex-col w-full rounded-lg border-2 ${adv.borderColor} bg-black/90 p-1.5 sm:p-2 shadow-lg backdrop-blur-sm transition-opacity duration-200`}
-                    style={{ boxShadow: adv.glowShadow }}
-                  >
-                    {/* Perk Header: Icon and Name */}
-                    <div className="flex items-center justify-between gap-1 mb-1">
-                      <div className="flex items-center gap-1.5">
-                        {adv.icon}
-                        <span 
-                          className="font-mono text-[10px] sm:text-xs font-black tracking-wider uppercase"
-                          style={{ color: adv.color }}
-                        >
-                          {adv.name}
-                        </span>
-                      </div>
-                      <span className="font-mono text-[9px] font-bold text-white/60">
-                        {Math.ceil(adv.timer / 1000)}s
-                      </span>
-                    </div>
-
-                    {/* 10-Second Sliding Gauge Track & Bar */}
-                    <div className="relative h-2 sm:h-2.5 w-full overflow-hidden rounded bg-black/70 border border-white/10 p-[1px]">
-                      <div
-                        className={`h-full rounded-sm ${adv.barColor} transition-all duration-75 ease-linear shadow-[0_0_8px_currentColor]`}
+              {activeAdvantages.length > 1 && (
+                <div className="flex items-center justify-between gap-1.5 pb-1 mb-1 border-b border-white/15">
+                  <span className="font-mono text-[8px] sm:text-[9px] font-black tracking-wider uppercase text-[#f7d302]">
+                    {activeAdvantages.length} ADVANTAGES ACTIVE
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {activeAdvantages.map((adv) => (
+                      <span
+                        key={adv.id}
+                        className="size-2 rounded-full"
                         style={{
-                          width: `${progressPercent}%`,
                           backgroundColor: adv.color,
+                          boxShadow: `0 0 6px ${adv.color}`,
                         }}
                       />
-                    </div>
+                    ))}
                   </div>
-                );
-              })}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1.5">
+                {activeAdvantages.map((adv, idx) => {
+                  const maxDur = adv.maxDuration ?? standardMaxDuration;
+                  const progressRatio = Math.max(0, Math.min(1, adv.timer / maxDur));
+                  const progressPercent = Math.round(progressRatio * 100);
+
+                  return (
+                    <div
+                      key={adv.id}
+                      id={`top-right-sliding-bar-${adv.id}`}
+                      className={
+                        idx > 0 ? 'pt-1.5 border-t border-white/10' : ''
+                      }
+                    >
+                      {/* Perk Header: Icon, Name & Countdown */}
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {adv.icon}
+                          <span
+                            className="font-mono text-[10px] sm:text-xs font-black tracking-wider uppercase truncate"
+                            style={{ color: adv.color }}
+                          >
+                            {adv.name}
+                          </span>
+                        </div>
+                        <span className="font-mono text-[9px] font-bold text-white/70 shrink-0">
+                          {Math.ceil(adv.timer / 1000)}s
+                        </span>
+                      </div>
+
+                      {/* Sliding Gauge Track & Bar */}
+                      <div className="relative h-2 sm:h-2.5 w-full overflow-hidden rounded bg-black/70 border border-white/10 p-[1px]">
+                        <div
+                          className={`h-full rounded-sm ${adv.barColor} transition-all duration-75 ease-linear shadow-[0_0_8px_currentColor]`}
+                          style={{
+                            width: `${progressPercent}%`,
+                            backgroundColor: adv.color,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

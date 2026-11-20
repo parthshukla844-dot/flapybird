@@ -1,7 +1,7 @@
 import React from 'react';
 import { Difficulty, BiomeType, BirdSkin } from '../types';
 import { BIOMES, BIOME_ITEMS } from '../game/pixelArt';
-import { Play, Sparkles, Trophy, Volume2, VolumeX, Music, CloudSun, Lock, RotateCcw, Maximize2, Minimize2, HelpCircle, History } from 'lucide-react';
+import { Play, Sparkles, Trophy, Volume2, VolumeX, Music, CloudSun, Lock, RotateCcw, Maximize2, Minimize2, HelpCircle, History, Target } from 'lucide-react';
 import { retroAudio } from '../game/audio';
 
 interface MenuScreenProps {
@@ -14,10 +14,13 @@ interface MenuScreenProps {
   soundEnabled: boolean;
   musicEnabled: boolean;
   isFullscreen?: boolean;
+  missionsCompletedCount?: number;
+  missionsTotalCount?: number;
   onStartGame: (diff?: Difficulty) => void;
   onOpenShop: (tab?: 'avatars' | 'weathers') => void;
   onOpenInstructions?: () => void;
   onOpenHistory?: () => void;
+  onOpenMissions?: () => void;
   onSelectDifficulty: (diff: Difficulty) => void;
   onSelectBiome: (biome: BiomeType) => void;
   onToggleSound: () => void;
@@ -36,10 +39,13 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({
   soundEnabled,
   musicEnabled,
   isFullscreen,
+  missionsCompletedCount = 0,
+  missionsTotalCount = 3,
   onStartGame,
   onOpenShop,
   onOpenInstructions,
   onOpenHistory,
+  onOpenMissions,
   onSelectDifficulty,
   onSelectBiome,
   onToggleSound,
@@ -132,6 +138,30 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({
               title="Restart Game from Beginning (Reset Weathers, Avatars & Coins to 0¢)"
             >
               <RotateCcw className="size-3.5 sm:size-4 md:size-5" />
+            </button>
+          )}
+
+          {onOpenMissions && (
+            <button
+              id="btn-menu-missions"
+              onClick={() => {
+                retroAudio.playSelect();
+                onOpenMissions();
+              }}
+              className={`flex h-7 sm:h-8 md:h-10 lg:h-11 items-center gap-1 sm:gap-1.5 rounded-lg border-2 px-2 sm:px-2.5 md:px-3 transition-all cursor-pointer shadow-md ${
+                missionsCompletedCount >= missionsTotalCount
+                  ? 'border-[#73bf2e]/80 bg-[#73bf2e]/15 text-[#73bf2e] hover:bg-[#73bf2e] hover:text-black'
+                  : 'border-[#f7d302]/70 bg-[#f7d302]/15 text-[#f7d302] hover:bg-[#f7d302] hover:text-black'
+              }`}
+              title={`Daily Missions (${missionsCompletedCount}/${missionsTotalCount} Complete)`}
+            >
+              <Target className="size-3.5 sm:size-4 md:size-5 shrink-0" />
+              <span className="hidden md:inline font-mono text-[9px] lg:text-[11px] font-black tracking-wider uppercase">
+                MISSIONS
+              </span>
+              <span className="font-mono text-[9px] sm:text-[10px] font-black rounded bg-black/50 px-1 py-0.5 border border-current/30">
+                {missionsCompletedCount}/{missionsTotalCount}
+              </span>
             </button>
           )}
 
@@ -243,19 +273,41 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({
           </button>
         </div>
 
-        {/* Instructions / How to Play Button */}
-        {onOpenInstructions && (
-          <button
-            id="btn-hero-instructions"
-            onClick={() => {
-              retroAudio.playSelect();
-              onOpenInstructions();
-            }}
-            className="flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-lg border border-white/25 bg-black/75 hover:border-[#f7d302] hover:bg-[#f7d302]/15 text-white/90 hover:text-white transition-all text-[10px] sm:text-xs font-mono font-bold cursor-pointer mb-3 sm:mb-4 shadow-sm active:scale-95"
-          >
-            <HelpCircle className="size-3.5 sm:size-4 text-[#f7d302]" />
-            <span>HOW TO PLAY / INSTRUCTIONS</span>
-          </button>
+        {/* Instructions & Daily Missions Buttons */}
+        {(onOpenInstructions || onOpenMissions) && (
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-3 sm:mb-4">
+            {onOpenMissions && (
+              <button
+                id="btn-hero-missions"
+                onClick={() => {
+                  retroAudio.playSelect();
+                  onOpenMissions();
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-lg border transition-all text-[10px] sm:text-xs font-mono font-bold cursor-pointer shadow-sm active:scale-95 ${
+                  missionsCompletedCount >= missionsTotalCount
+                    ? 'border-[#73bf2e]/80 bg-[#73bf2e]/15 text-[#73bf2e] hover:bg-[#73bf2e]/25'
+                    : 'border-[#f7d302]/70 bg-[#f7d302]/15 text-[#f7d302] hover:bg-[#f7d302]/25'
+                }`}
+              >
+                <Target className="size-3.5 sm:size-4" />
+                <span>DAILY MISSIONS ({missionsCompletedCount}/{missionsTotalCount})</span>
+              </button>
+            )}
+
+            {onOpenInstructions && (
+              <button
+                id="btn-hero-instructions"
+                onClick={() => {
+                  retroAudio.playSelect();
+                  onOpenInstructions();
+                }}
+                className="flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-lg border border-white/25 bg-black/75 hover:border-[#f7d302] hover:bg-[#f7d302]/15 text-white/90 hover:text-white transition-all text-[10px] sm:text-xs font-mono font-bold cursor-pointer shadow-sm active:scale-95"
+              >
+                <HelpCircle className="size-3.5 sm:size-4 text-[#f7d302]" />
+                <span>HOW TO PLAY / INSTRUCTIONS</span>
+              </button>
+            )}
+          </div>
         )}
 
         {/* 3 Difficulty Option Buttons */}

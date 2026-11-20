@@ -5,11 +5,30 @@ import {
   BiomeType, 
   BirdSkin, 
   ActivePowerUps,
-  HistoryEntry
+  HistoryEntry,
+  DailyMission,
+  DailyMissionsState,
+  DailyStreakState
 } from './types';
 import { SKINS, BIOMES, BIOME_ITEMS } from './game/pixelArt';
 import { FlappyEngine } from './game/engine';
 import { retroAudio } from './game/audio';
+import { 
+  loadOrInitDailyMissions, 
+  generateDailyMissions, 
+  saveDailyMissions, 
+  resetDailyMissionsHistory,
+  applyMissionEvent,
+  claimDailyMissionReward
+} from './game/dailyMissions';
+import {
+  loadDailyStreak,
+  recordDailyStreakPlay,
+  resetDailyStreak,
+  getStreakMultiplier,
+  formatMultiplier,
+  hasPlayedToday,
+} from './game/dailyStreak';
 import { ArcadeHUD } from './components/ArcadeHUD';
 import { MenuScreen } from './components/MenuScreen';
 import { GameOverModal } from './components/GameOverModal';
@@ -18,7 +37,11 @@ import { PauseScreen } from './components/PauseScreen';
 import { ResetConfirmModal } from './components/ResetConfirmModal';
 import { InstructionsModal } from './components/InstructionsModal';
 import { HistoryModal } from './components/HistoryModal';
-import { Sparkles, CloudSun, RotateCcw, Maximize2, Minimize2, History } from 'lucide-react';
+import { DailyMissionsModal } from './components/DailyMissionsModal';
+import { DailyMissionsLeaderboardModal } from './components/DailyMissionsLeaderboardModal';
+import { DailyStreakModal } from './components/DailyStreakModal';
+import { MissionToast } from './components/MissionToast';
+import { Sparkles, CloudSun, RotateCcw, Maximize2, Minimize2, History, Target, Flame } from 'lucide-react';
 
 const STORAGE_KEY = 'FLAPPY_PIXEL_DATA_V2';
 const HISTORY_STORAGE_KEY = 'FLAPPY_PIXEL_HISTORY_V1';
@@ -51,10 +74,72 @@ export default function App() {
   const [isShopOpen, setIsShopOpen] = useState<boolean>(false);
   const [isInstructionsOpen, setIsInstructionsOpen] = useState<boolean>(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
+  const [isMissionsOpen, setIsMissionsOpen] = useState<boolean>(false);
+  const [isMissionsLeaderboardOpen, setIsMissionsLeaderboardOpen] = useState<boolean>(false);
+  const [isStreakOpen, setIsStreakOpen] = useState<boolean>(false);
+  const [missionsState, setMissionsState] = useState<DailyMissionsState>(() => loadOrInitDailyMissions());
+  const missionsStateRef = useRef<DailyMissionsState>(missionsState);
+  const [missionToastQueue, setMissionToastQueue] = useState<DailyMission[]>([]);
+  const [streakState, setStreakState] = useState<DailyStreakState>(() => loadDailyStreak());
+  const streakStateRef = useRef<DailyStreakState>(streakState);
+  const streakMultiplier = getStreakMultiplier(streakState.currentStreak);
+  const streakMultiplierRef = useRef<number>(streakMultiplier);
+  const [streakToast, setStreakToast] = useState<{
+    streak: number;
+    multiplier: number;
+    unlockedNewMultiplier: boolean;
+  } | null>(null);
+  const streakToastTimeoutRef = useRef<number | null>(null);
   const [shopInitialTab, setShopInitialTab] = useState<'avatars' | 'weathers'>('avatars');
   const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
   const [resetToastMessage, setResetToastMessage] = useState<string | null>(null);
   const resetToastTimeoutRef = useRef<number | null>(null);
+
+  // Refs for stable mission tracking without tearing down FlappyEngine
+  const highScoreRef = useRef<number>(highScore);
+  const totalCoinsRef = useRef<number>(totalCoins);
+  const unlockedSkinsRef = useRef<string[]>(unlockedSkins);
+  const selectedSkinRef = useRef<BirdSkin>(selectedSkin);
+  const unlockedBiomesRef = useRef<string[]>(unlockedBiomes);
+  const selectedBiomeRef = useRef<BiomeType>(selectedBiome);
+  const difficultyRef = useRef<Difficulty>(difficulty);
+  const soundEnabledRef = useRef<boolean>(soundEnabled);
+  const musicEnabledRef = useRef<boolean>(musicEnabled);
+
+  useEffect(() => { highScoreRef.current = highScore; }, [highScore]);
+  useEffect(() => { totalCoinsRef.current = totalCoins; }, [totalCoins]);
+  useEffect(() => { unlockedSkinsRef.current = unlockedSkins; }, [unlockedSkins]);
+  useEffect(() => { selectedSkinRef.current = selectedSkin; }, [selectedSkin]);
+  useEffect(() => { unlockedBiomesRef.current = unlockedBiomes; }, [unlockedBiomes]);
+  useEffect(() => { selectedBiomeRef.current = selectedBiome; }, [selectedBiome]);
+  useEffect(() => { difficultyRef.current = difficulty; }, [difficulty]);
+  useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
+  useEffect(() => { musicEnabledRef.current = musicEnabled; }, [musicEnabled]);
+  useEffect(() => { missionsStateRef.current = missionsState; }, [missionsState]);
+  useEffect(() => { streakStateRef.current = streakState; }, [streakState]);
+  useEffect(() => { streakMultiplierRef.current = streakMultiplier; }, [streakMultiplier]);
+
+  // Refresh streak & daily missions when tab regains focus (handles midnight rollover)
+  useEffect(() => {
+    const handleFocus = () => {
+      const freshStreak = loadDailyStreak();
+      streakStateRef.current = freshStreak;
+      setStreakState(freshStreak);
+      const freshMissions = loadOrInitDailyMissions();
+      missionsStateRef.current = freshMissions;
+      setMissionsState(freshMissions);
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+
+  useEffect(() => {
+    if (missionToastQueue.length === 0) return;
+    const timer = window.setTimeout(() => {
+      setMissionToastQueue((prev) => prev.slice(1));
+    }, 3800);
+    return () => window.clearTimeout(timer);
+  }, [missionToastQueue]);
 
   const [activePowerUps, setActivePowerUps] = useState<ActivePowerUps>({
     shield: false,
@@ -176,6 +261,61 @@ export default function App() {
     });
   }, []);
 
+  // Process live & end-of-run Daily Mission milestones without destabilizing FlappyEngine
+  const processMissionEvent = useCallback((event: {
+    type: 'score' | 'coin' | 'laser_destroy' | 'powerup_collect' | 'game_over';
+    value?: number;
+  }): DailyMission[] => {
+    const result = applyMissionEvent(missionsStateRef.current, {
+      ...event,
+      biome: selectedBiomeRef.current,
+      difficulty: difficultyRef.current,
+    });
+
+    if (result.changed) {
+      missionsStateRef.current = result.nextState;
+      setMissionsState(result.nextState);
+    }
+
+    if (result.newlyCompleted.length > 0) {
+      retroAudio.playPowerUp();
+      setMissionToastQueue((prev) => [...prev, ...result.newlyCompleted]);
+    }
+
+    return result.newlyCompleted;
+  }, []);
+
+  // Explicitly claim a completed mission's reward coins and add them directly to total balance
+  const handleClaimMissionReward = useCallback((missionId: string) => {
+    const { nextState, rewardCoins, claimedMission } = claimDailyMissionReward(
+      missionsStateRef.current,
+      missionId
+    );
+    if (!claimedMission || rewardCoins <= 0) return;
+
+    missionsStateRef.current = nextState;
+    setMissionsState(nextState);
+    retroAudio.playCoin();
+
+    setTotalCoins((prev) => {
+      const updated = prev + rewardCoins;
+      totalCoinsRef.current = updated;
+      saveState(
+        highScoreRef.current,
+        updated,
+        unlockedSkinsRef.current,
+        selectedSkinRef.current.id,
+        unlockedBiomesRef.current,
+        selectedBiomeRef.current,
+        difficultyRef.current,
+        crtFilterEnabled,
+        soundEnabledRef.current,
+        musicEnabledRef.current
+      );
+      return updated;
+    });
+  }, [saveState]);
+
   // Initialize Game Engine
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -184,15 +324,26 @@ export default function App() {
     const engine = new FlappyEngine(canvas, {
       onScoreChange: (score) => {
         setCurrentScore(score);
+        processMissionEvent({ type: 'score', value: score });
       },
       onCoinsChange: (coins) => {
         setRunCoins(coins);
+      },
+      onCoinCollect: (amount) => {
+        processMissionEvent({ type: 'coin', value: amount });
+      },
+      onLaserDestroy: () => {
+        processMissionEvent({ type: 'laser_destroy', value: 1 });
+      },
+      onPowerUpCollect: () => {
+        processMissionEvent({ type: 'powerup_collect', value: 1 });
       },
       onStateChange: (state) => {
         setGameState(state);
       },
       onGameOver: (finalScore, earnedCoins, newHigh) => {
         setIsNewHighScore(newHigh);
+        processMissionEvent({ type: 'game_over' });
 
         // Record Medal Win into Permanent History if score qualifies (score >= 10), or record No Medal entry
         if (finalScore >= 10) {
@@ -251,8 +402,8 @@ export default function App() {
               selectedBiome,
               difficulty,
               crtFilterEnabled,
-              soundEnabled,
-              musicEnabled
+              soundEnabledRef.current,
+              musicEnabledRef.current
             );
 
             return nextHigh;
@@ -266,6 +417,7 @@ export default function App() {
     engine.setBiome(selectedBiome);
     engine.setSkin(selectedSkin);
     engine.setHighScore(highScore);
+    engine.setStreakMultiplier(streakMultiplierRef.current);
     engine.render();
 
     engineRef.current = engine;
@@ -281,7 +433,7 @@ export default function App() {
       engine.stop();
       clearInterval(interval);
     };
-  }, [saveState, unlockedBiomes, unlockedSkins, selectedSkin.id, selectedBiome, difficulty, crtFilterEnabled, soundEnabled, musicEnabled, highScore]);
+  }, [saveState, processMissionEvent, unlockedBiomes, unlockedSkins, selectedSkin.id, selectedBiome, difficulty, crtFilterEnabled, highScore]);
 
   // Sync settings with engine
   useEffect(() => {
@@ -290,8 +442,9 @@ export default function App() {
       engineRef.current.setBiome(selectedBiome);
       engineRef.current.setSkin(selectedSkin);
       engineRef.current.setHighScore(highScore);
+      engineRef.current.setStreakMultiplier(streakMultiplier);
     }
-  }, [difficulty, selectedBiome, selectedSkin, highScore]);
+  }, [difficulty, selectedBiome, selectedSkin, highScore, streakMultiplier]);
 
   // Global Keyboard Event Handlers
   useEffect(() => {
@@ -328,7 +481,7 @@ export default function App() {
         e.code === 'ShiftLeft' || 
         e.code === 'ShiftRight'
       ) {
-        if (isShopOpen || isInstructionsOpen || isHistoryOpen || isResetModalOpen) return;
+        if (isShopOpen || isInstructionsOpen || isHistoryOpen || isMissionsOpen || isMissionsLeaderboardOpen || isStreakOpen || isResetModalOpen) return;
         if (gameState === 'PLAYING') {
           e.preventDefault();
           engineRef.current?.fireLaser();
@@ -337,7 +490,7 @@ export default function App() {
       }
 
       if (e.code === 'KeyR') {
-        if (isShopOpen || isInstructionsOpen || isHistoryOpen || isResetModalOpen) return;
+        if (isShopOpen || isInstructionsOpen || isHistoryOpen || isMissionsOpen || isMissionsLeaderboardOpen || isStreakOpen || isResetModalOpen) return;
         if (gameState === 'PLAYING' || gameState === 'PAUSED' || gameState === 'GAMEOVER') {
           e.preventDefault();
           retroAudio.playSelect();
@@ -364,7 +517,42 @@ export default function App() {
         return;
       }
 
+      if (e.code === 'KeyD') {
+        e.preventDefault();
+        retroAudio.playSelect();
+        setIsMissionsOpen((prev) => {
+          if (!prev) {
+            if (gameState === 'PLAYING') {
+              engineRef.current?.pause();
+            }
+            const fresh = loadOrInitDailyMissions();
+            missionsStateRef.current = fresh;
+            setMissionsState(fresh);
+          }
+          return !prev;
+        });
+        return;
+      }
+
       if (e.code === 'Escape') {
+        if (isMissionsLeaderboardOpen) {
+          e.preventDefault();
+          retroAudio.playSelect();
+          setIsMissionsLeaderboardOpen(false);
+          return;
+        }
+        if (isStreakOpen) {
+          e.preventDefault();
+          retroAudio.playSelect();
+          setIsStreakOpen(false);
+          return;
+        }
+        if (isMissionsOpen) {
+          e.preventDefault();
+          retroAudio.playSelect();
+          setIsMissionsOpen(false);
+          return;
+        }
         if (isHistoryOpen) {
           e.preventDefault();
           retroAudio.playSelect();
@@ -381,7 +569,7 @@ export default function App() {
 
       if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
         e.preventDefault();
-        if (isShopOpen || isInstructionsOpen || isHistoryOpen || isResetModalOpen) return;
+        if (isShopOpen || isInstructionsOpen || isHistoryOpen || isMissionsOpen || isMissionsLeaderboardOpen || isStreakOpen || isResetModalOpen) return;
 
         if (gameState === 'PLAYING') {
           engineRef.current?.flap();
@@ -397,9 +585,12 @@ export default function App() {
         } else if (gameState === 'PAUSED') {
           engineRef.current?.resume();
         }
-      } else if (e.code === 'KeyM') {
+      } else if (e.code === 'KeyS') {
         e.preventDefault();
         toggleSound();
+      } else if (e.code === 'KeyM') {
+        e.preventDefault();
+        toggleMusic();
       } else if (e.code === 'KeyF') {
         e.preventDefault();
         toggleFullscreen();
@@ -408,7 +599,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState, isShopOpen, isInstructionsOpen, isHistoryOpen, isResetModalOpen]);
+  }, [gameState, isShopOpen, isInstructionsOpen, isHistoryOpen, isMissionsOpen, isMissionsLeaderboardOpen, isStreakOpen, isResetModalOpen]);
 
   // Responsive Cabinet & Device Orientation Resize Observer
   useEffect(() => {
@@ -534,30 +725,62 @@ export default function App() {
     }
   };
 
-  const handleStartGame = (diff?: Difficulty) => {
+  const handleStartGame = (diff?: Difficulty, biomeOverride?: BiomeType) => {
     if (!engineRef.current) return;
     const targetDiff = diff || difficulty;
+    const targetBiome = biomeOverride || selectedBiome;
     setDifficulty(targetDiff);
+    if (biomeOverride) {
+      setSelectedBiome(biomeOverride);
+    }
+
+    // Record daily streak check-in on consecutive days & apply unlocked coin multiplier immediately
+    const streakResult = recordDailyStreakPlay(streakStateRef.current);
+    streakStateRef.current = streakResult.nextState;
+    setStreakState(streakResult.nextState);
+    streakMultiplierRef.current = streakResult.newMultiplier;
+    if (streakResult.increased) {
+      if (streakToastTimeoutRef.current) {
+        window.clearTimeout(streakToastTimeoutRef.current);
+      }
+      setStreakToast({
+        streak: streakResult.nextState.currentStreak,
+        multiplier: streakResult.newMultiplier,
+        unlockedNewMultiplier: streakResult.unlockedNewMultiplier,
+      });
+      streakToastTimeoutRef.current = window.setTimeout(() => {
+        setStreakToast(null);
+        streakToastTimeoutRef.current = null;
+      }, 4000);
+    }
+
     saveState(
       highScore,
       totalCoins,
       unlockedSkins,
       selectedSkin.id,
       unlockedBiomes,
-      selectedBiome,
+      targetBiome,
       targetDiff,
       crtFilterEnabled,
       soundEnabled,
       musicEnabled
     );
     setIsShopOpen(false);
+    setIsMissionsOpen(false);
+    setIsMissionsLeaderboardOpen(false);
+    setIsStreakOpen(false);
     engineRef.current.setDifficulty(targetDiff);
-    engineRef.current.setBiome(selectedBiome);
+    engineRef.current.setBiome(targetBiome);
+    engineRef.current.setStreakMultiplier(streakResult.newMultiplier);
     engineRef.current.start(targetDiff);
   };
 
   const handleGoHome = () => {
     setIsShopOpen(false);
+    setIsMissionsOpen(false);
+    setIsMissionsLeaderboardOpen(false);
+    setIsStreakOpen(false);
     setGameState('MENU');
     if (engineRef.current) {
       engineRef.current.stop();
@@ -583,6 +806,26 @@ export default function App() {
 
   const handleCloseInstructions = () => {
     setIsInstructionsOpen(false);
+  };
+
+  const handleOpenMissions = () => {
+    if (gameState === 'PLAYING') {
+      engineRef.current?.pause();
+    }
+    const fresh = loadOrInitDailyMissions();
+    missionsStateRef.current = fresh;
+    setMissionsState(fresh);
+    setIsMissionsOpen(true);
+  };
+
+  const handleOpenStreak = () => {
+    if (gameState === 'PLAYING') {
+      engineRef.current?.pause();
+    }
+    const fresh = loadDailyStreak();
+    streakStateRef.current = fresh;
+    setStreakState(fresh);
+    setIsStreakOpen(true);
   };
 
   const handleSelectSkin = (skin: BirdSkin) => {
@@ -723,18 +966,22 @@ export default function App() {
   const toggleSound = () => {
     setSoundEnabled((prev) => {
       const next = !prev;
+      soundEnabledRef.current = next;
       retroAudio.setSoundEnabled(next);
+      if (next) {
+        retroAudio.playSelect();
+      }
       saveState(
-        highScore,
-        totalCoins,
-        unlockedSkins,
-        selectedSkin.id,
-        unlockedBiomes,
-        selectedBiome,
-        difficulty,
+        highScoreRef.current,
+        totalCoinsRef.current,
+        unlockedSkinsRef.current,
+        selectedSkinRef.current.id,
+        unlockedBiomesRef.current,
+        selectedBiomeRef.current,
+        difficultyRef.current,
         crtFilterEnabled,
         next,
-        musicEnabled
+        musicEnabledRef.current
       );
       return next;
     });
@@ -743,6 +990,7 @@ export default function App() {
   const toggleMusic = () => {
     setMusicEnabled((prev) => {
       const next = !prev;
+      musicEnabledRef.current = next;
       retroAudio.setMusicEnabled(next);
       if (next) {
         if (gameState === 'PLAYING') {
@@ -752,15 +1000,15 @@ export default function App() {
         retroAudio.stopMusic();
       }
       saveState(
-        highScore,
-        totalCoins,
-        unlockedSkins,
-        selectedSkin.id,
-        unlockedBiomes,
-        selectedBiome,
-        difficulty,
+        highScoreRef.current,
+        totalCoinsRef.current,
+        unlockedSkinsRef.current,
+        selectedSkinRef.current.id,
+        unlockedBiomesRef.current,
+        selectedBiomeRef.current,
+        difficultyRef.current,
         crtFilterEnabled,
-        soundEnabled,
+        soundEnabledRef.current,
         next
       );
       return next;
@@ -782,6 +1030,8 @@ export default function App() {
     setRunCoins(0);
     setGameState('MENU');
     setIsShopOpen(false);
+    setIsMissionsOpen(false);
+    setIsMissionsLeaderboardOpen(false);
     setIsResetModalOpen(false);
 
     // Audio SFX for system wipe
@@ -803,6 +1053,22 @@ export default function App() {
     } catch {
       // ignore
     }
+
+    // Reset Daily Missions & 7-day history for fresh start
+    resetDailyMissionsHistory();
+    const freshMissions = generateDailyMissions();
+    missionsStateRef.current = freshMissions;
+    setMissionsState(freshMissions);
+    saveDailyMissions(freshMissions);
+    setMissionToastQueue([]);
+
+    // Reset Daily Streak for fresh start
+    const emptyStreak = resetDailyStreak();
+    streakStateRef.current = emptyStreak;
+    streakMultiplierRef.current = 1;
+    setStreakState(emptyStreak);
+    setStreakToast(null);
+    engineRef.current?.setStreakMultiplier(1);
 
     // Persist cleanly to localStorage
     saveState(
@@ -828,6 +1094,10 @@ export default function App() {
       resetToastTimeoutRef.current = null;
     }, 5000);
   };
+
+  const missionsCompletedCount = missionsState.missions.filter((m) => m.completed).length;
+  const missionsTotalCount = missionsState.missions.length;
+  const unclaimedMissionsCount = missionsState.missions.filter((m) => m.completed && !m.claimed).length;
 
   return (
     <div 
@@ -859,7 +1129,7 @@ export default function App() {
           </p>
         </button>
 
-        <div className="flex items-center gap-2 sm:gap-6 md:gap-8">
+        <div className="flex items-center gap-2 sm:gap-5 md:gap-7">
           <div className="flex flex-col items-end">
             <span className="text-[7px] sm:text-[9px] md:text-[10px] text-white/40 uppercase tracking-wider">Best</span>
             <span className="text-sm sm:text-xl md:text-2xl lg:text-3xl font-bold font-mono tracking-wider">
@@ -876,6 +1146,50 @@ export default function App() {
               </span>
             </div>
           </div>
+
+          {/* Daily Streak Counter next to Bank Balance */}
+          <button
+            id="btn-header-streak"
+            onClick={() => {
+              retroAudio.playSelect();
+              handleOpenStreak();
+            }}
+            className={`flex flex-col items-end rounded-lg border px-1.5 sm:px-2.5 py-0.5 sm:py-1 transition-all cursor-pointer shrink-0 ${
+              streakState.currentStreak > 0
+                ? 'border-[#fb923c]/60 bg-[#fb923c]/10 hover:border-[#fb923c] hover:bg-[#fb923c]/20 shadow-[0_0_12px_rgba(251,146,60,0.2)]'
+                : 'border-white/15 bg-white/5 hover:border-white/40 hover:bg-white/10'
+            }`}
+            title={`Daily Streak: ${streakState.currentStreak} ${streakState.currentStreak === 1 ? 'Day' : 'Days'} • Coin Multiplier: ${formatMultiplier(streakMultiplier)}${hasPlayedToday(streakState) ? ' (Logged Today)' : ' (Play today to extend!)'}`}
+          >
+            <div className="flex items-center gap-1">
+              <span className="text-[7px] sm:text-[9px] md:text-[10px] text-white/50 uppercase tracking-wider">Streak</span>
+              <span
+                className={`rounded px-1 py-[1px] text-[7px] sm:text-[8px] font-black leading-none ${
+                  streakMultiplier > 1
+                    ? 'bg-[#f7d302] text-black shadow-[0_0_6px_rgba(247,211,2,0.5)]'
+                    : 'bg-white/10 text-white/60'
+                }`}
+              >
+                {formatMultiplier(streakMultiplier)}¢
+              </span>
+            </div>
+            <div className="flex items-center gap-0.5 sm:gap-1">
+              <Flame
+                className={`size-3 sm:size-4 md:size-5 ${
+                  streakState.currentStreak > 0
+                    ? 'text-[#fb923c] fill-[#fb923c] drop-shadow-[0_0_6px_rgba(251,146,60,0.85)]'
+                    : 'text-white/30'
+                }`}
+              />
+              <span
+                className={`text-sm sm:text-xl md:text-2xl lg:text-3xl font-black font-mono tracking-wider ${
+                  streakState.currentStreak > 0 ? 'text-[#fb923c]' : 'text-white/45'
+                }`}
+              >
+                {streakState.currentStreak}D
+              </span>
+            </div>
+          </button>
 
           <div className="flex items-center gap-1 sm:gap-1.5">
             <button
@@ -906,6 +1220,36 @@ export default function App() {
             >
               <CloudSun className="size-3 sm:size-3.5" />
               <span>WEATHERS (6)</span>
+            </button>
+
+            <button
+              id="btn-header-missions"
+              onClick={() => {
+                retroAudio.playSelect();
+                handleOpenMissions();
+              }}
+              className={`relative flex items-center gap-1 sm:gap-1.5 rounded-lg border-2 px-1.5 sm:px-2 py-1 text-xs font-black transition-all cursor-pointer shadow-sm ${
+                unclaimedMissionsCount > 0
+                  ? 'border-[#73bf2e] bg-[#73bf2e]/20 text-[#73bf2e] hover:bg-[#73bf2e] hover:text-black shadow-[0_0_12px_rgba(115,191,46,0.45)]'
+                  : missionsCompletedCount >= missionsTotalCount
+                  ? 'border-[#73bf2e]/80 bg-[#73bf2e]/15 text-[#73bf2e] hover:bg-[#73bf2e] hover:text-black'
+                  : 'border-[#f7d302]/70 bg-[#f7d302]/15 text-[#f7d302] hover:bg-[#f7d302] hover:text-black'
+              }`}
+              title={`Daily Missions — ${missionsCompletedCount}/${missionsTotalCount} Complete${unclaimedMissionsCount > 0 ? ` (${unclaimedMissionsCount} Ready to Claim!)` : ''} (D)`}
+            >
+              <Target className="size-3 sm:size-3.5 shrink-0" />
+              <span className="hidden sm:inline">MISSIONS</span>
+              <span className="font-mono text-[9px] sm:text-[10px] bg-black/50 px-1 py-0.5 rounded border border-current/30">
+                {missionsCompletedCount}/{missionsTotalCount}
+              </span>
+              {unclaimedMissionsCount > 0 && (
+                <span
+                  aria-label={`${unclaimedMissionsCount} rewards ready to claim`}
+                  className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-[#f7d302] text-[9px] font-black text-black border border-black animate-bounce"
+                >
+                  !
+                </span>
+              )}
             </button>
 
             <button
@@ -980,6 +1324,7 @@ export default function App() {
               totalCoins={totalCoins}
               highScore={highScore}
               difficulty={difficulty}
+              selectedSkinId={selectedSkin.id}
               activePowerUps={activePowerUps}
               isPaused={gameState === 'PAUSED'}
               soundEnabled={soundEnabled}
@@ -1029,6 +1374,8 @@ export default function App() {
               soundEnabled={soundEnabled}
               musicEnabled={musicEnabled}
               isFullscreen={isFullscreen}
+              missionsCompletedCount={missionsCompletedCount}
+              missionsTotalCount={missionsTotalCount}
               onStartGame={handleStartGame}
               onOpenShop={handleOpenShop}
               onOpenInstructions={handleOpenInstructions}
@@ -1036,6 +1383,7 @@ export default function App() {
                 retroAudio.playSelect();
                 setIsHistoryOpen(true);
               }}
+              onOpenMissions={handleOpenMissions}
               onSelectDifficulty={handleSelectDifficulty}
               onSelectBiome={handleSelectBiome}
               onToggleSound={toggleSound}
@@ -1050,7 +1398,7 @@ export default function App() {
             isOpen={gameState === 'PAUSED'}
             score={currentScore}
             onResume={() => engineRef.current?.resume()}
-            onRestart={() => engineRef.current?.start()}
+            onRestart={() => handleStartGame()}
             onQuitToMenu={handleGoHome}
             onOpenInstructions={handleOpenInstructions}
             onRequestReset={() => setIsResetModalOpen(true)}
@@ -1064,6 +1412,7 @@ export default function App() {
             coinsEarned={runCoins}
             totalCoins={totalCoins}
             isNewHighScore={isNewHighScore}
+            streakMultiplier={streakMultiplier}
             onRestart={handleStartGame}
             onOpenShop={handleOpenShop}
             onGoHome={handleGoHome}
@@ -1115,6 +1464,93 @@ export default function App() {
               setIsResetModalOpen(true);
             }}
           />
+
+          {/* Daily Missions Modal */}
+          <DailyMissionsModal
+            isOpen={isMissionsOpen}
+            missionsState={missionsState}
+            unlockedBiomes={unlockedBiomes}
+            selectedBiome={selectedBiome}
+            onClose={() => setIsMissionsOpen(false)}
+            onClaimReward={handleClaimMissionReward}
+            onPlayBiome={(biome) => {
+              setIsMissionsOpen(false);
+              handleStartGame(undefined, biome);
+            }}
+            onPlayDifficulty={(diff) => {
+              setIsMissionsOpen(false);
+              handleStartGame(diff);
+            }}
+            onPlayNow={() => {
+              setIsMissionsOpen(false);
+              handleStartGame();
+            }}
+            onOpenWeatherVault={() => {
+              setIsMissionsOpen(false);
+              handleOpenShop('weathers');
+            }}
+            onOpenLeaderboard={() => {
+              setIsMissionsLeaderboardOpen(true);
+            }}
+          />
+
+          {/* Daily Missions Leaderboard Modal (D3 Global Average Comparison) */}
+          <DailyMissionsLeaderboardModal
+            isOpen={isMissionsLeaderboardOpen}
+            missionsState={missionsState}
+            onClose={() => setIsMissionsLeaderboardOpen(false)}
+            onBackToMissions={() => {
+              setIsMissionsLeaderboardOpen(false);
+              setIsMissionsOpen(true);
+            }}
+          />
+
+          {/* Daily Streak Multiplier Modal */}
+          <DailyStreakModal
+            isOpen={isStreakOpen}
+            streakState={streakState}
+            onClose={() => setIsStreakOpen(false)}
+            onPlayNow={() => {
+              setIsStreakOpen(false);
+              handleStartGame();
+            }}
+          />
+
+          {/* Daily Mission Completion Toast Notification */}
+          <MissionToast
+            mission={missionToastQueue[0] ?? null}
+            completedCount={missionsCompletedCount}
+            totalCount={missionsTotalCount}
+          />
+
+          {/* Daily Streak Increase Toast Notification */}
+          {streakToast && !missionToastQueue[0] && (
+            <div
+              id="daily-streak-toast"
+              className="pointer-events-none absolute top-14 sm:top-16 left-1/2 -translate-x-1/2 z-[94] w-[92%] sm:w-auto sm:min-w-[320px] max-w-md rounded-xl border-2 border-[#fb923c] bg-black/95 px-3.5 py-2.5 sm:px-4 sm:py-3 font-mono text-white shadow-[0_0_32px_rgba(251,146,60,0.65)] backdrop-blur-md animate-in fade-in slide-in-from-top-4"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex size-8 sm:size-9 shrink-0 items-center justify-center rounded-lg border border-[#fb923c] bg-[#fb923c]/20 text-[#fb923c]">
+                    <Flame className="size-4 sm:size-5 fill-current" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#fb923c]">
+                      DAY {streakToast.streak} STREAK {streakToast.unlockedNewMultiplier ? 'BOOST UNLOCKED!' : 'ACTIVE!'}
+                    </p>
+                    <p className="text-xs sm:text-sm font-black text-white truncate">
+                      {streakToast.multiplier > 1
+                        ? `${formatMultiplier(streakToast.multiplier)} Coin Multiplier active on all runs!`
+                        : 'Come back tomorrow to unlock 1.25x Coins!'}
+                    </p>
+                  </div>
+                </div>
+                <span className="shrink-0 rounded-lg border-2 border-[#f7d302] bg-[#f7d302]/20 px-2 py-1 text-xs sm:text-sm font-black text-[#f7d302]">
+                  {formatMultiplier(streakToast.multiplier)}¢
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Reset Confirmation Toast Banner - Always visible in both Windowed & Fullscreen modes */}
           {resetToastMessage && (

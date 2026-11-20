@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, RotateCcw, Sparkles, Award, Home, CloudSun } from 'lucide-react';
+import { Trophy, RotateCcw, Sparkles, Award, Home, CloudSun, Flame } from 'lucide-react';
 import { retroAudio } from '../game/audio';
 
 interface GameOverModalProps {
@@ -9,6 +9,7 @@ interface GameOverModalProps {
   coinsEarned: number;
   totalCoins: number;
   isNewHighScore: boolean;
+  streakMultiplier?: number;
   onRestart: () => void;
   onOpenShop: (tab?: 'avatars' | 'weathers') => void;
   onGoHome: () => void;
@@ -22,6 +23,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   coinsEarned,
   totalCoins,
   isNewHighScore,
+  streakMultiplier = 1,
   onRestart,
   onOpenShop,
   onGoHome,
@@ -95,7 +97,13 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           {/* Run Earnings */}
           <div className="flex items-center justify-between border-b border-white/10 pb-1 sm:pb-1.5">
             <span className="font-mono text-[9px] sm:text-[10px] text-white/50 uppercase font-bold tracking-wider">CREDITS</span>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
+              {streakMultiplier > 1 && (
+                <span className="inline-flex items-center gap-0.5 rounded bg-[#fb923c]/20 border border-[#fb923c]/60 px-1 py-0.5 font-mono text-[8px] sm:text-[9px] font-black text-[#fb923c]">
+                  <Flame className="size-2.5 fill-current" />
+                  {streakMultiplier}x
+                </span>
+              )}
               <div className="size-2 rounded-full bg-[#f7d302]" />
               <span className="font-mono text-xs sm:text-sm font-bold text-[#f7d302]">+{coinsEarned}¢</span>
             </div>
