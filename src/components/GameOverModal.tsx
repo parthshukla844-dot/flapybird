@@ -1,5 +1,7 @@
 import React from 'react';
-import { Trophy, RotateCcw, Sparkles, Award, Home, CloudSun, Flame } from 'lucide-react';
+import { Trophy, RotateCcw, Sparkles, Award, Home, CloudSun, Flame, Zap } from 'lucide-react';
+import { BiomeType, Difficulty } from '../types';
+import { BIOMES } from '../game/pixelArt';
 import { retroAudio } from '../game/audio';
 
 interface GameOverModalProps {
@@ -10,6 +12,9 @@ interface GameOverModalProps {
   totalCoins: number;
   isNewHighScore: boolean;
   streakMultiplier?: number;
+  lastRunDifficulty: Difficulty;
+  lastRunBiome: BiomeType;
+  onQuickRestart: () => void;
   onRestart: () => void;
   onOpenShop: (tab?: 'avatars' | 'weathers') => void;
   onGoHome: () => void;
@@ -24,12 +29,18 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   totalCoins,
   isNewHighScore,
   streakMultiplier = 1,
+  lastRunDifficulty,
+  lastRunBiome,
+  onQuickRestart,
   onRestart,
   onOpenShop,
   onGoHome,
   onRequestReset,
 }) => {
   if (!isOpen) return null;
+
+  const biomeName = BIOMES[lastRunBiome]?.name ?? lastRunBiome.toUpperCase();
+  const difficultyLabel = lastRunDifficulty.toUpperCase();
 
   // Calculate medal award
   let medal: { name: string; color: string; bg: string; iconColor: string } | null = null;
@@ -123,16 +134,37 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
         {/* Action Buttons */}
         <div id="gameover-actions-container" className="space-y-1.5 sm:space-y-2">
+          {/* Dedicated Quick Restart Button — Immediately restarts with previous difficulty & biome */}
           <button
+            type="button"
+            id="btn-quick-restart"
+            onClick={() => {
+              retroAudio.playSelect();
+              onQuickRestart();
+            }}
+            className="w-full flex flex-col items-center justify-center gap-0.5 rounded-lg border-2 border-black bg-[#73bf2e] py-2 sm:py-2.5 px-3 font-mono text-black font-black tracking-wider shadow-[0_3px_0_#000000,0_0_16px_rgba(115,191,46,0.4)] active:translate-y-0.5 active:shadow-none hover:bg-[#84d838] cursor-pointer transition-all"
+            title={`Quick Restart immediately in ${difficultyLabel} mode • ${biomeName} (R)`}
+          >
+            <div className="flex items-center justify-center gap-1.5 text-xs sm:text-sm">
+              <Zap className="size-3.5 sm:size-4 fill-current stroke-[2.5]" />
+              <span>QUICK RESTART</span>
+            </div>
+            <span className="text-[8px] sm:text-[9px] font-bold tracking-widest uppercase text-black/80">
+              {difficultyLabel} • {biomeName}
+            </span>
+          </button>
+
+          <button
+            type="button"
             id="btn-restart-game"
             onClick={() => {
               retroAudio.playSelect();
               onRestart();
             }}
-            className="w-full flex items-center justify-center gap-2 rounded-lg border-2 border-black bg-[#f7d302] py-2 sm:py-2.5 font-mono text-xs sm:text-sm text-black font-black tracking-wider shadow-[0_3px_0_#000000] active:translate-y-0.5 active:shadow-none hover:bg-[#ffe338] cursor-pointer"
+            className="w-full flex items-center justify-center gap-1.5 rounded-lg border-2 border-[#f7d302]/80 bg-[#f7d302]/15 py-1.5 sm:py-2 font-mono text-[10px] sm:text-xs text-[#f7d302] font-black tracking-wider hover:bg-[#f7d302] hover:text-black cursor-pointer transition-colors"
           >
-            <RotateCcw className="size-3.5 sm:size-4 stroke-[2.5]" />
-            PLAY AGAIN
+            <RotateCcw className="size-3 sm:size-3.5 stroke-[2.5]" />
+            PLAY AGAIN (CURRENT LOADOUT)
           </button>
 
           <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
@@ -189,9 +221,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         </div>
 
         <p className="mt-1.5 sm:mt-2 font-mono text-[8px] sm:text-[9px] text-white/40 uppercase">
-          PRESS SPACE OR TAP TO RESTART
+          PRESS R FOR QUICK RESTART • SPACE TO PLAY AGAIN
         </p>
       </div>
     </div>
   );
 };
+

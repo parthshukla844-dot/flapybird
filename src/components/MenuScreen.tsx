@@ -3,6 +3,7 @@ import { Difficulty, BiomeType, BirdSkin } from '../types';
 import { BIOMES, BIOME_ITEMS } from '../game/pixelArt';
 import { Play, Sparkles, Trophy, Volume2, VolumeX, Music, CloudSun, Lock, RotateCcw, Maximize2, Minimize2, HelpCircle, History, Target } from 'lucide-react';
 import { retroAudio } from '../game/audio';
+import { Biome3DPreview } from './Biome3DPreview';
 
 interface MenuScreenProps {
   highScore: number;
@@ -310,51 +311,67 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({
           </div>
         )}
 
-        {/* 3 Difficulty Option Buttons */}
-        <div className="w-full space-y-2 md:space-y-3">
-          <p className="font-mono text-[9px] sm:text-[10px] md:text-xs text-white/60 uppercase tracking-[0.2em] font-bold mb-1 md:mb-2">
-            CHOOSE DIFFICULTY TO PLAY
-          </p>
+        {/* Main Start Section with Animated 3D-like Rotating Biome Preview Behind Buttons */}
+        <div
+          id="menu-start-stage"
+          className="relative w-full pt-14 sm:pt-16 md:pt-20 pb-1"
+        >
+          {/* Animated 3D Rotating Miniature Biome Landscape */}
+          <Biome3DPreview
+            biome={selectedBiome}
+            className="absolute -inset-x-3 sm:-inset-x-6 -top-8 -bottom-3 z-0 opacity-95"
+          />
 
-          <div className="grid grid-cols-1 gap-2 sm:gap-2.5 md:gap-3 w-full">
-            {difficulties.map((d) => {
-              const isSelected = difficulty === d.id;
-              return (
-                <button
-                  key={d.id}
-                  id={`btn-diff-play-${d.id}`}
-                  onClick={() => {
-                    retroAudio.playSelect();
-                    onSelectDifficulty(d.id);
-                    onStartGame(d.id);
-                  }}
-                  className={`group relative flex items-center justify-between w-full px-3.5 py-2.5 sm:px-4 sm:py-3.5 md:px-6 md:py-4.5 rounded-xl md:rounded-2xl border-2 md:border-3 transition-all cursor-pointer text-left ${
-                    isSelected
-                      ? `${d.border} bg-black/90 shadow-[0_0_20px_rgba(255,255,255,0.18)] scale-[1.01]`
-                      : `border-white/15 bg-black/80 ${d.bgHover}`
-                  }`}
-                >
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-2 md:gap-3">
-                      <span className={`font-mono text-sm sm:text-base md:text-xl font-black tracking-wider ${d.textColor}`}>
-                        {d.label}
-                      </span>
-                      <span className="font-mono text-[8px] sm:text-[9px] md:text-xs text-white/40 font-bold">
-                        {d.badge}
+          <div className="relative z-10 w-full space-y-2 md:space-y-3">
+            <div className="flex items-center justify-center gap-2 mb-1 md:mb-2">
+              <p className="font-mono text-[9px] sm:text-[10px] md:text-xs text-white/85 uppercase tracking-[0.2em] font-black drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)]">
+                CHOOSE DIFFICULTY TO PLAY
+              </p>
+              <span className="hidden sm:inline-block rounded bg-black/70 border border-[#4ec0ca]/50 px-1.5 py-0.5 font-mono text-[8px] md:text-[9px] font-black uppercase tracking-wider text-[#4ec0ca]">
+                {BIOMES[selectedBiome]?.name}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:gap-2.5 md:gap-3 w-full">
+              {difficulties.map((d) => {
+                const isSelected = difficulty === d.id;
+                return (
+                  <button
+                    key={d.id}
+                    id={`btn-diff-play-${d.id}`}
+                    onClick={() => {
+                      retroAudio.playSelect();
+                      onSelectDifficulty(d.id);
+                      onStartGame(d.id);
+                    }}
+                    className={`group relative flex items-center justify-between w-full px-3.5 py-2.5 sm:px-4 sm:py-3 md:px-6 md:py-4 rounded-xl md:rounded-2xl border-2 md:border-3 transition-all cursor-pointer text-left backdrop-blur-[2px] ${
+                      isSelected
+                        ? `${d.border} bg-black/60 shadow-[0_0_22px_rgba(0,0,0,0.65)] scale-[1.01]`
+                        : `border-white/20 bg-black/50 ${d.bgHover}`
+                    }`}
+                  >
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <span className={`font-mono text-sm sm:text-base md:text-xl font-black tracking-wider drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)] ${d.textColor}`}>
+                          {d.label}
+                        </span>
+                        <span className="font-mono text-[8px] sm:text-[9px] md:text-xs text-white/55 font-bold">
+                          {d.badge}
+                        </span>
+                      </div>
+                      <span className="font-mono text-[9px] sm:text-[10px] md:text-xs text-white/80 mt-0.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+                        {d.desc}
                       </span>
                     </div>
-                    <span className="font-mono text-[9px] sm:text-[10px] md:text-xs text-white/70 mt-0.5">
-                      {d.desc}
-                    </span>
-                  </div>
 
-                  <div className={`flex items-center gap-1.5 md:gap-2 px-3.5 py-1.5 sm:px-4.5 sm:py-2 md:px-6 md:py-3 rounded-lg md:rounded-xl font-mono text-[10px] sm:text-xs md:text-sm font-black tracking-wider transition-transform group-hover:scale-105 group-active:scale-95 ${d.btnColor}`}>
-                    <Play className="size-3 md:size-4 fill-current" />
-                    <span>PLAY</span>
-                  </div>
-                </button>
-              );
-            })}
+                    <div className={`flex items-center gap-1.5 md:gap-2 px-3.5 py-1.5 sm:px-4.5 sm:py-2 md:px-6 md:py-3 rounded-lg md:rounded-xl font-mono text-[10px] sm:text-xs md:text-sm font-black tracking-wider transition-transform group-hover:scale-105 group-active:scale-95 ${d.btnColor}`}>
+                      <Play className="size-3 md:size-4 fill-current" />
+                      <span>PLAY</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 

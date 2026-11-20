@@ -41,7 +41,7 @@ import { DailyMissionsModal } from './components/DailyMissionsModal';
 import { DailyMissionsLeaderboardModal } from './components/DailyMissionsLeaderboardModal';
 import { DailyStreakModal } from './components/DailyStreakModal';
 import { MissionToast } from './components/MissionToast';
-import { Sparkles, CloudSun, RotateCcw, Maximize2, Minimize2, History, Target, Flame } from 'lucide-react';
+import { Sparkles, CloudSun, RotateCcw, Maximize2, Minimize2, History, Target, Flame, Volume2, VolumeX } from 'lucide-react';
 
 const STORAGE_KEY = 'FLAPPY_PIXEL_DATA_V2';
 const HISTORY_STORAGE_KEY = 'FLAPPY_PIXEL_HISTORY_V1';
@@ -71,6 +71,14 @@ export default function App() {
   const [currentScore, setCurrentScore] = useState<number>(0);
   const [runCoins, setRunCoins] = useState<number>(0);
   const [isNewHighScore, setIsNewHighScore] = useState<boolean>(false);
+  const [lastRunConfig, setLastRunConfig] = useState<{
+    difficulty: Difficulty;
+    biome: BiomeType;
+  }>({ difficulty: 'medium', biome: 'day' });
+  const lastRunConfigRef = useRef<{ difficulty: Difficulty; biome: BiomeType }>({
+    difficulty: 'medium',
+    biome: 'day',
+  });
   const [isShopOpen, setIsShopOpen] = useState<boolean>(false);
   const [isInstructionsOpen, setIsInstructionsOpen] = useState<boolean>(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
@@ -497,7 +505,11 @@ export default function App() {
         if (gameState === 'PLAYING' || gameState === 'PAUSED' || gameState === 'GAMEOVER') {
           e.preventDefault();
           retroAudio.playSelect();
-          handleStartGame();
+          if (gameState === 'GAMEOVER') {
+            handleQuickRestart();
+          } else {
+            handleStartGame();
+          }
           setResetToastMessage('FLIGHT RESTARTED: Ready, Set, Fly!');
           if (resetToastTimeoutRef.current) clearTimeout(resetToastTimeoutRef.current);
           resetToastTimeoutRef.current = window.setTimeout(() => {
@@ -732,6 +744,9 @@ export default function App() {
     if (!engineRef.current) return;
     const targetDiff = diff || difficulty;
     const targetBiome = biomeOverride || selectedBiome;
+    const runCfg = { difficulty: targetDiff, biome: targetBiome };
+    lastRunConfigRef.current = runCfg;
+    setLastRunConfig(runCfg);
     setDifficulty(targetDiff);
     if (biomeOverride) {
       setSelectedBiome(biomeOverride);
@@ -777,6 +792,12 @@ export default function App() {
     engineRef.current.setBiome(targetBiome);
     engineRef.current.setStreakMultiplier(streakResult.newMultiplier);
     engineRef.current.start(targetDiff);
+  };
+
+  // Dedicated one-click Quick Restart: immediately starts a new run with the exact same difficulty & biome as the previous run
+  const handleQuickRestart = () => {
+    const { difficulty: prevDiff, biome: prevBiome } = lastRunConfigRef.current;
+    handleStartGame(prevDiff, prevBiome);
   };
 
   const handleGoHome = () => {
@@ -1150,6 +1171,30 @@ export default function App() {
             </div>
           </div>
 
+          {/* Dedicated Header Sound Mute / Unmute Toggle near Bank Balance */}
+          <button
+            type="button"
+            id="btn-header-toggle-sound"
+            onClick={toggleSound}
+            aria-label={soundEnabled ? 'Mute sound effects' : 'Unmute sound effects'}
+            aria-pressed={!soundEnabled}
+            className={`flex items-center justify-center gap-1 rounded-lg border-2 px-1.5 sm:px-2.5 py-1 sm:py-1.5 transition-all cursor-pointer shrink-0 shadow-sm ${
+              soundEnabled
+                ? 'border-[#4ec0ca]/70 bg-[#4ec0ca]/15 text-[#4ec0ca] hover:bg-[#4ec0ca] hover:text-black shadow-[0_0_10px_rgba(78,192,202,0.2)]'
+                : 'border-[#f25022]/70 bg-[#f25022]/15 text-[#f25022] hover:bg-[#f25022] hover:text-white shadow-[0_0_10px_rgba(242,80,34,0.2)]'
+            }`}
+            title={soundEnabled ? 'Sound On — Click to Mute (S)' : 'Sound Muted — Click to Unmute (S)'}
+          >
+            {soundEnabled ? (
+              <Volume2 className="size-3.5 sm:size-4 md:size-5 shrink-0" />
+            ) : (
+              <VolumeX className="size-3.5 sm:size-4 md:size-5 shrink-0" />
+            )}
+            <span className="hidden lg:inline font-mono text-[10px] font-black tracking-wider uppercase">
+              {soundEnabled ? 'SOUND' : 'MUTED'}
+            </span>
+          </button>
+
           {/* Daily Streak Counter next to Bank Balance */}
           <button
             id="btn-header-streak"
@@ -1416,6 +1461,9 @@ export default function App() {
             totalCoins={totalCoins}
             isNewHighScore={isNewHighScore}
             streakMultiplier={streakMultiplier}
+            lastRunDifficulty={lastRunConfig.difficulty}
+            lastRunBiome={lastRunConfig.biome}
+            onQuickRestart={handleQuickRestart}
             onRestart={handleStartGame}
             onOpenShop={handleOpenShop}
             onGoHome={handleGoHome}
