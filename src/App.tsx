@@ -111,7 +111,10 @@ export default function App() {
   useEffect(() => { unlockedSkinsRef.current = unlockedSkins; }, [unlockedSkins]);
   useEffect(() => { selectedSkinRef.current = selectedSkin; }, [selectedSkin]);
   useEffect(() => { unlockedBiomesRef.current = unlockedBiomes; }, [unlockedBiomes]);
-  useEffect(() => { selectedBiomeRef.current = selectedBiome; }, [selectedBiome]);
+  useEffect(() => {
+    selectedBiomeRef.current = selectedBiome;
+    retroAudio.setBiome(selectedBiome);
+  }, [selectedBiome]);
   useEffect(() => { difficultyRef.current = difficulty; }, [difficulty]);
   useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
   useEffect(() => { musicEnabledRef.current = musicEnabled; }, [musicEnabled]);
@@ -994,7 +997,7 @@ export default function App() {
       retroAudio.setMusicEnabled(next);
       if (next) {
         if (gameState === 'PLAYING') {
-          retroAudio.startMusic();
+          retroAudio.startMusic(selectedBiomeRef.current);
         }
       } else {
         retroAudio.stopMusic();

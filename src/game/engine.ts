@@ -169,6 +169,7 @@ export class FlappyEngine {
 
   public setBiome(biome: BiomeType) {
     this.selectedBiome = biome;
+    retroAudio.setBiome(biome);
   }
 
   public setSkin(skin: BirdSkin) {
@@ -294,7 +295,7 @@ export class FlappyEngine {
     }
 
     retroAudio.playSelect();
-    retroAudio.startMusic();
+    retroAudio.startMusic(this.selectedBiome);
 
     this.lastTimestamp = performance.now();
     this.loop();
@@ -570,7 +571,7 @@ export class FlappyEngine {
       this.state = 'PLAYING';
       this.callbacks.onStateChange('PLAYING');
       this.lastTimestamp = performance.now();
-      retroAudio.startMusic();
+      retroAudio.startMusic(this.selectedBiome);
       if (this.animationFrameId !== null) {
         cancelAnimationFrame(this.animationFrameId);
       }

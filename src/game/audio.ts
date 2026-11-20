@@ -1,22 +1,149 @@
 /**
  * Retro Chiptune Audio Synthesizer using Web Audio API
  * Generates authentic 8-bit waveforms (square, triangle, noise, sawtooth)
+ * with Dynamic Biome Soundscapes (per-biome pitch, tempo, timbre, filter, and echo).
  */
+
+import { BiomeType } from '../types';
+
+export interface BiomeSoundscapeProfile {
+  label: string;
+  tempoMultiplier: number; // > 1 faster, < 1 slower
+  pitchMultiplier: number; // frequency ratio (semitone transposition)
+  melodyWave: OscillatorType;
+  bassWave: OscillatorType;
+  melodyGain: number;
+  bassGain: number;
+  noteGate: number; // 0..1 note sustain ratio
+  filterFreq: number; // lowpass cutoff Hz
+  filterQ: number; // filter resonance
+  echoDelay: number; // seconds
+  echoFeedback: number; // 0..0.6 feedback amount
+  echoWet: number; // 0..0.6 wet echo level
+  shimmerOvertone?: boolean; // crystalline upper octave glint (winter)
+  pulseDrive?: boolean; // energetic beat accent (volcano / cyberpunk)
+}
+
+export const BIOME_SOUNDSCAPES: Record<BiomeType, BiomeSoundscapeProfile> = {
+  day: {
+    label: 'Sunny Classic',
+    tempoMultiplier: 1.0,
+    pitchMultiplier: 1.0, // C Major baseline
+    melodyWave: 'square',
+    bassWave: 'triangle',
+    melodyGain: 0.08,
+    bassGain: 0.18,
+    noteGate: 0.85,
+    filterFreq: 4800,
+    filterQ: 0.8,
+    echoDelay: 0.16,
+    echoFeedback: 0.12,
+    echoWet: 0.06,
+  },
+  sunset: {
+    label: 'Golden Groove',
+    tempoMultiplier: 0.94,
+    pitchMultiplier: 0.9439, // -1 semitone (warm golden feel)
+    melodyWave: 'triangle',
+    bassWave: 'triangle',
+    melodyGain: 0.11,
+    bassGain: 0.19,
+    noteGate: 0.92,
+    filterFreq: 2600,
+    filterQ: 1.0,
+    echoDelay: 0.24,
+    echoFeedback: 0.28,
+    echoWet: 0.24,
+  },
+  night: {
+    label: 'Nocturnal Cave Echo',
+    tempoMultiplier: 0.9,
+    pitchMultiplier: 0.8909, // -2 semitones (deep atmospheric pitch)
+    melodyWave: 'triangle',
+    bassWave: 'sine',
+    melodyGain: 0.1,
+    bassGain: 0.2,
+    noteGate: 0.88,
+    filterFreq: 2200,
+    filterQ: 1.2,
+    echoDelay: 0.28,
+    echoFeedback: 0.46,
+    echoWet: 0.44,
+  },
+  cyberpunk: {
+    label: 'Neon Synthdrive',
+    tempoMultiplier: 1.12,
+    pitchMultiplier: 1.0595, // +1 semitone (crisp elevated synthwave)
+    melodyWave: 'sawtooth',
+    bassWave: 'sawtooth',
+    melodyGain: 0.065,
+    bassGain: 0.12,
+    noteGate: 0.74,
+    filterFreq: 3400,
+    filterQ: 2.4,
+    echoDelay: 0.145,
+    echoFeedback: 0.34,
+    echoWet: 0.3,
+    pulseDrive: true,
+  },
+  volcano: {
+    label: 'Magma Overdrive',
+    tempoMultiplier: 1.24, // noticeably higher urgent tempo
+    pitchMultiplier: 1.1225, // +2 semitones (intense fiery lift)
+    melodyWave: 'sawtooth',
+    bassWave: 'square',
+    melodyGain: 0.072,
+    bassGain: 0.13,
+    noteGate: 0.78,
+    filterFreq: 3900,
+    filterQ: 2.0,
+    echoDelay: 0.19,
+    echoFeedback: 0.32,
+    echoWet: 0.22,
+    pulseDrive: true,
+  },
+  winter: {
+    label: 'Frost Cavern Chimes',
+    tempoMultiplier: 0.96,
+    pitchMultiplier: 1.1892, // +3 semitones (sparkling crystalline register)
+    melodyWave: 'sine',
+    bassWave: 'triangle',
+    melodyGain: 0.11,
+    bassGain: 0.17,
+    noteGate: 0.92,
+    filterFreq: 5400,
+    filterQ: 1.1,
+    echoDelay: 0.26,
+    echoFeedback: 0.5,
+    echoWet: 0.48,
+    shimmerOvertone: true,
+  },
+};
+
+const BASE_STEP_DURATION = 0.16; // 120 BPM baseline
 
 class RetroAudioEngine {
   private ctx: AudioContext | null = null;
   private musicGain: GainNode | null = null;
+  private musicInput: GainNode | null = null;
+  private musicFilter: BiquadFilterNode | null = null;
+  private musicDryGain: GainNode | null = null;
+  private echoDelay: DelayNode | null = null;
+  private echoToneFilter: BiquadFilterNode | null = null;
+  private echoFeedbackGain: GainNode | null = null;
+  private echoWetGain: GainNode | null = null;
   private sfxGain: GainNode | null = null;
   private isMusicPlaying = false;
-  private bgmIntervalId: number | null = null;
+  private bgmTimeoutId: number | null = null;
   private soundEnabled = true;
   private musicEnabled = true;
+  private currentBiome: BiomeType = 'day';
 
   private initContext() {
     if (!this.ctx) {
       const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new AudioCtxClass();
-      
+
       this.sfxGain = this.ctx.createGain();
       this.sfxGain.gain.setValueAtTime(this.soundEnabled ? 0.3 : 0, this.ctx.currentTime);
       this.sfxGain.connect(this.ctx.destination);
@@ -24,9 +151,87 @@ class RetroAudioEngine {
       this.musicGain = this.ctx.createGain();
       this.musicGain.gain.setValueAtTime(this.musicEnabled ? 0.12 : 0, this.ctx.currentTime);
       this.musicGain.connect(this.ctx.destination);
+
+      // Dynamic Biome Soundscape FX bus:
+      // musicInput -> musicFilter -> (dry + feedback echo delay) -> musicGain
+      this.musicInput = this.ctx.createGain();
+      this.musicInput.gain.setValueAtTime(1.0, this.ctx.currentTime);
+
+      this.musicFilter = this.ctx.createBiquadFilter();
+      this.musicFilter.type = 'lowpass';
+
+      this.musicDryGain = this.ctx.createGain();
+      this.musicDryGain.gain.setValueAtTime(1.0, this.ctx.currentTime);
+
+      this.echoDelay = this.ctx.createDelay(1.0);
+      this.echoToneFilter = this.ctx.createBiquadFilter();
+      this.echoToneFilter.type = 'lowpass';
+      this.echoToneFilter.frequency.setValueAtTime(2400, this.ctx.currentTime);
+
+      this.echoFeedbackGain = this.ctx.createGain();
+      this.echoWetGain = this.ctx.createGain();
+
+      this.musicInput.connect(this.musicFilter);
+      this.musicFilter.connect(this.musicDryGain);
+      this.musicDryGain.connect(this.musicGain);
+
+      this.musicFilter.connect(this.echoDelay);
+      this.echoDelay.connect(this.echoToneFilter);
+      this.echoToneFilter.connect(this.echoFeedbackGain);
+      this.echoFeedbackGain.connect(this.echoDelay);
+      this.echoToneFilter.connect(this.echoWetGain);
+      this.echoWetGain.connect(this.musicGain);
+
+      this.applyBiomeAudioParams(true);
     }
     if (this.ctx.state === 'suspended') {
       this.ctx.resume();
+    }
+  }
+
+  public getBiomeSoundscape(biome: BiomeType = this.currentBiome): BiomeSoundscapeProfile {
+    return BIOME_SOUNDSCAPES[biome] ?? BIOME_SOUNDSCAPES.day;
+  }
+
+  public setBiome(biome: BiomeType) {
+    this.currentBiome = biome;
+    this.applyBiomeAudioParams(false);
+  }
+
+  private applyBiomeAudioParams(immediate: boolean) {
+    if (
+      !this.ctx ||
+      !this.musicFilter ||
+      !this.echoDelay ||
+      !this.echoFeedbackGain ||
+      !this.echoWetGain
+    ) {
+      return;
+    }
+
+    const profile = this.getBiomeSoundscape(this.currentBiome);
+    const now = this.ctx.currentTime;
+    const safeFeedback = Math.min(0.58, Math.max(0, profile.echoFeedback));
+    const safeWet = Math.min(0.6, Math.max(0, profile.echoWet));
+
+    this.musicFilter.frequency.cancelScheduledValues(now);
+    this.musicFilter.Q.cancelScheduledValues(now);
+    this.echoDelay.delayTime.cancelScheduledValues(now);
+    this.echoFeedbackGain.gain.cancelScheduledValues(now);
+    this.echoWetGain.gain.cancelScheduledValues(now);
+
+    if (immediate) {
+      this.musicFilter.frequency.setValueAtTime(profile.filterFreq, now);
+      this.musicFilter.Q.setValueAtTime(profile.filterQ, now);
+      this.echoDelay.delayTime.setValueAtTime(profile.echoDelay, now);
+      this.echoFeedbackGain.gain.setValueAtTime(safeFeedback, now);
+      this.echoWetGain.gain.setValueAtTime(safeWet, now);
+    } else {
+      this.musicFilter.frequency.setTargetAtTime(profile.filterFreq, now, 0.08);
+      this.musicFilter.Q.setTargetAtTime(profile.filterQ, now, 0.08);
+      this.echoDelay.delayTime.setTargetAtTime(profile.echoDelay, now, 0.08);
+      this.echoFeedbackGain.gain.setTargetAtTime(safeFeedback, now, 0.08);
+      this.echoWetGain.gain.setTargetAtTime(safeWet, now, 0.08);
     }
   }
 
@@ -405,15 +610,22 @@ class RetroAudioEngine {
     });
   }
 
-  // Dynamic Chiptune BGM Generator
-  public startMusic() {
-    if (!this.musicEnabled || this.isMusicPlaying) return;
+  // Dynamic Chiptune BGM Generator with Per-Biome Soundscapes
+  public startMusic(biome?: BiomeType) {
+    if (biome) {
+      this.currentBiome = biome;
+    }
+    if (!this.musicEnabled || this.isMusicPlaying) {
+      this.applyBiomeAudioParams(false);
+      return;
+    }
     this.initContext();
-    if (!this.ctx || !this.musicGain) return;
+    if (!this.ctx || !this.musicInput) return;
 
+    this.applyBiomeAudioParams(true);
     this.isMusicPlaying = true;
 
-    // Upbeat 8-bit melody and bass loops (Key of C / A Minor, lively arcade tempo)
+    // Upbeat 8-bit melody and bass loops (Key of C / A Minor, dynamically transposed & tempo-scaled per biome)
     const melodyNotes = [
       523.25, 659.25, 783.99, 659.25, 880.00, 783.99, 659.25, 587.33,
       523.25, 659.25, 783.99, 1046.5, 987.77, 783.99, 880.00, 783.99,
@@ -429,60 +641,109 @@ class RetroAudioEngine {
     ];
 
     let step = 0;
-    const stepDuration = 0.16; // 120 BPM 16th/8th notes
 
     const playStep = () => {
-      if (!this.isMusicPlaying || !this.ctx || !this.musicGain || !this.musicEnabled) return;
+      if (!this.isMusicPlaying || !this.ctx || !this.musicInput || !this.musicEnabled) return;
 
+      const profile = this.getBiomeSoundscape(this.currentBiome);
+      const stepDuration = BASE_STEP_DURATION / profile.tempoMultiplier;
       const now = this.ctx.currentTime;
-      const mFreq = melodyNotes[step % melodyNotes.length];
-      const bFreq = bassNotes[step % bassNotes.length];
 
-      // Melody channel (Square wave with pulse charm)
+      const baseMFreq = melodyNotes[step % melodyNotes.length];
+      const baseBFreq = bassNotes[step % bassNotes.length];
+      const mFreq = baseMFreq > 0 ? baseMFreq * profile.pitchMultiplier : 0;
+      const bFreq = baseBFreq > 0 ? baseBFreq * profile.pitchMultiplier : 0;
+
+      // Melody channel shaped by current biome timbre & pitch
       if (mFreq > 0) {
         const oscM = this.ctx.createOscillator();
         const gainM = this.ctx.createGain();
-        oscM.type = 'square';
+        oscM.type = profile.melodyWave;
         oscM.frequency.setValueAtTime(mFreq, now);
 
-        gainM.gain.setValueAtTime(0.08, now);
-        gainM.gain.exponentialRampToValueAtTime(0.001, now + stepDuration * 0.85);
+        gainM.gain.setValueAtTime(profile.melodyGain, now);
+        gainM.gain.exponentialRampToValueAtTime(0.001, now + stepDuration * profile.noteGate);
 
         oscM.connect(gainM);
-        gainM.connect(this.musicGain);
+        gainM.connect(this.musicInput);
 
         oscM.start(now);
         oscM.stop(now + stepDuration);
+
+        // Crystalline upper-octave chime overtone (Winter Frost Cavern)
+        if (profile.shimmerOvertone && step % 2 === 0) {
+          const oscS = this.ctx.createOscillator();
+          const gainS = this.ctx.createGain();
+          oscS.type = 'sine';
+          oscS.frequency.setValueAtTime(mFreq * 2, now);
+
+          gainS.gain.setValueAtTime(profile.melodyGain * 0.32, now);
+          gainS.gain.exponentialRampToValueAtTime(0.001, now + stepDuration * 0.72);
+
+          oscS.connect(gainS);
+          gainS.connect(this.musicInput);
+
+          oscS.start(now);
+          oscS.stop(now + stepDuration * 0.75);
+        }
       }
 
-      // Bass channel (Triangle wave for warm retro bass)
+      // Bass channel shaped by current biome timbre & pitch
       if (bFreq > 0) {
         const oscB = this.ctx.createOscillator();
         const gainB = this.ctx.createGain();
-        oscB.type = 'triangle';
+        oscB.type = profile.bassWave;
         oscB.frequency.setValueAtTime(bFreq, now);
 
-        gainB.gain.setValueAtTime(0.18, now);
+        gainB.gain.setValueAtTime(profile.bassGain, now);
         gainB.gain.exponentialRampToValueAtTime(0.01, now + stepDuration * 0.95);
 
         oscB.connect(gainB);
-        gainB.connect(this.musicGain);
+        gainB.connect(this.musicInput);
 
         oscB.start(now);
         oscB.stop(now + stepDuration);
       }
 
+      // Subtle low-end driving percussion pulse on strong beats (Volcano / Cyberpunk)
+      if (profile.pulseDrive && step % 4 === 0) {
+        const oscK = this.ctx.createOscillator();
+        const gainK = this.ctx.createGain();
+        oscK.type = 'triangle';
+        oscK.frequency.setValueAtTime(125, now);
+        oscK.frequency.exponentialRampToValueAtTime(42, now + 0.075);
+
+        gainK.gain.setValueAtTime(0.16, now);
+        gainK.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+        oscK.connect(gainK);
+        gainK.connect(this.musicInput);
+
+        oscK.start(now);
+        oscK.stop(now + 0.085);
+      }
+
       step++;
+
+      if (this.isMusicPlaying && this.musicEnabled) {
+        this.bgmTimeoutId = window.setTimeout(playStep, Math.round(stepDuration * 1000));
+      }
     };
 
-    this.bgmIntervalId = window.setInterval(playStep, stepDuration * 1000);
+    playStep();
   }
 
   public stopMusic() {
     this.isMusicPlaying = false;
-    if (this.bgmIntervalId !== null) {
-      clearInterval(this.bgmIntervalId);
-      this.bgmIntervalId = null;
+    if (this.bgmTimeoutId !== null) {
+      window.clearTimeout(this.bgmTimeoutId);
+      this.bgmTimeoutId = null;
+    }
+    // Gently damp feedback tail when music stops so echo doesn't ring indefinitely
+    if (this.ctx && this.echoFeedbackGain) {
+      const now = this.ctx.currentTime;
+      this.echoFeedbackGain.gain.cancelScheduledValues(now);
+      this.echoFeedbackGain.gain.setTargetAtTime(0, now, 0.06);
     }
   }
 }
